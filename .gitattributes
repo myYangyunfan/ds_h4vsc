@@ -1,0 +1,18 @@
+# Normalize line endings to LF in the repository. .editorconfig, .prettierrc.json
+# and .vscode/settings.json ("files.eol": "\n") all assume LF, so this keeps
+# Windows checkouts from producing whole-file diffs.
+* text=auto eol=lf
+
+# Windows-only launchers must keep CRLF to stay executable by cmd.exe.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary assets - never normalize or diff as text.
+*.png binary
+*.ico binary
+*.jpg binary
+*.ttf binary
+*.vsix binary
+
+# Keep the lockfile out of language statistics; its diffs are still reviewable.
+pnpm-lock.yaml linguist-generated=true

@@ -1,0 +1,605 @@
+/**
+ * The chat orchestrator: owns the timeline reducer and the session state
+ * machine (idle -> prompting -> awaitingApproval -> idle), funnels ACP updates
+ * into the timeline, applies reducer effects to the working set, answers
+ * permission requests via the approval bridge, and pushes coalesced snapshots
+ * to the webview.
+ */
+import * as path from 'node:path';
+import { l10n } from 'vscode';
+import * as vscode from 'vscode';
+import {
+  TimelineReducer,
+  contentBlockText,
+  type AgentModeInfo,
+  type AcpPermissionOutcome,
+  type AcpPermissionRequest,
+  type AcpSessionUpdate,
+  type ApprovalRequest,
+  type ContextAttachment,
+  type EditInfo,
+  type KernelHandlers,
+  type PromptContentBlock,
+  type QuickActionId,
+  type SessionMeta,
+  type SessionStatus,
+  type SlashCommandInfo,
+  type TimelineEffect,
+  type TimelineEntry,
+  type ToWebview,
+} from '@dsh-vscode/core';
+import { buildSnapshot } from './EventMapper.js';
+import type { AcpBackend } from '../backend/AcpBackend.js';
+import type { WorkingSet } from '../editor/WorkingSet.js';
+import type { ContextService } from '../editor/ContextService.js';
+import type { DiffService } from '../editor/DiffService.js';
+import type { ApprovalBridge } from '../approval/ApprovalBridge.js';
+import type { SessionStore, MementoLike } from './SessionStore.js';
+import type { DshSettings } from '../config/Settings.js';
+import type { Logger } from '../util/log.js';
+
+/** Model-facing prompts for the quick actions (Chinese-primary workspace). */
+export const QUICK_PROMPTS: Record<QuickActionId, string> = {
+  explainSelection: '请详细解释附件中的代码：作用、逻辑与潜在问题。',
+  writeTests: '请为附件中的代码编写单元测试，说明所选测试框架并覆盖边界情况。',
+  refactor: '请重构附件中的代码：保持行为不变，提升可读性与结构，并说明改动理由。',
+  init: '/init',
+};
+
+/** Push channel consumed by the PanelController. */
+export interface SnapshotSink {
+  pushSnapshot(payload: ToWebview): void;
+  pushChunk(entryId: string, textDelta: string, thoughtDelta?: string): void;
+  pushError(message: string): void;
+}
+
+const SNAPSHOT_COALESCE_MS = 80;
+
+export class ChatSessionService implements vscode.Disposable {
+  private readonly backend: AcpBackend;
+  private readonly workingSet: WorkingSet;
+  private readonly diffService: DiffService;
+  private readonly approvals: ApprovalBridge;
+  private readonly sessions: SessionStore;
+  private readonly contexts: ContextService;
+  private readonly logger: Logger;
+  private status: SessionStatus = 'disconnected';
+  private statusDetail: string | undefined;
+  private sessionId: string | undefined;
+  private modes: AgentModeInfo[] = [];
+  private modeId: string | undefined;
+  private kernelCommands: SlashCommandInfo[] = [];
+  private history: SessionMeta[] = [];
+  private readonly reducer: TimelineReducer;
+  private readonly sink: SnapshotSink;
+  private snapshotTimer: NodeJS.Timeout | undefined;
+  private handlers: KernelHandlers | undefined;
+  private captures = new Map<string, { text: string }>();
+  private autoReconnecting = false;
+  private reconnectTimer: NodeJS.Timeout | undefined;
+  private settingsRef: DshSettings;
+  private memento: MementoLike | undefined;
+  private panelSink: ((message: ToWebview) => void) | undefined = undefined;
+
+  private get settings(): DshSettings {
+    return this.settingsRef;
+  }
+
+  constructor(
+    backend: AcpBackend,
+    workingSet: WorkingSet,
+    diffService: DiffService,
+    approvals: ApprovalBridge,
+    sessions: SessionStore,
+    contexts: ContextService,
+    settings: DshSettings,
+    logger: Logger,
+  ) {
+    this.backend = backend;
+    this.workingSet = workingSet;
+    this.diffService = diffService;
+    this.approvals = approvals;
+    this.sessions = sessions;
+    this.contexts = contexts;
+    this.settingsRef = settings;
+    this.logger = logger;
+    this.sink = {
+      pushSnapshot: (payload) => this.postToPanel(payload),
+      pushChunk: (entryId, textDelta, thoughtDelta) => {
+        this.postToPanel({ type: 'chunk', entryId, textDelta, thoughtDelta });
+      },
+      pushError: (message) => {
+        this.postToPanel({ type: 'error', message });
+      },
+    };
+    this.reducer = new TimelineReducer(undefined, {
+      onChunkAppended: (entryId, _role, delta) => this.sink.pushChunk(entryId, delta),
+      onThoughtAppended: (entryId, delta) => this.sink.pushChunk(entryId, '', delta),
+    });
+
+    this.backend.onCrash((err) => {
+      this.status = 'disconnected';
+      this.statusDetail = err.message;
+      this.sessionId = undefined;
+      this.handlers = undefined;
+      this.reducer.addError(l10n.t('内核已退出：{0}', err.message));
+      this.flushSnapshot();
+      // R13: one silent auto-reconnect so brief kernel crashes self-heal;
+      // repeated failures surface through the banner instead.
+      if (!this.autoReconnecting) {
+        this.autoReconnecting = true;
+        this.reconnectTimer = setTimeout(() => {
+          this.reconnectTimer = undefined;
+          void this.reconnect().finally(() => {
+            this.autoReconnecting = false;
+          });
+        }, 2_000);
+      }
+    });
+  }
+
+  /** R8: apply changed settings without reloading the window. */
+  updateSettings(settings: DshSettings): void {
+    this.settingsRef = settings;
+  }
+
+  /** Wires workspaceState-backed timeline persistence. */
+  setMemento(memento: MementoLike): void {
+    this.memento = memento;
+  }
+
+  /** Installed by the PanelController; the only webview coupling point. */
+  setPanelSink(sink: (message: ToWebview) => void): void {
+    this.panelSink = sink;
+  }
+
+  /** Refreshed by the PanelController from the SessionStore. */
+  async reloadHistory(): Promise<void> {
+    this.history = await this.sessions.list();
+    this.scheduleSnapshot();
+  }
+
+  /**
+   * Persists the current timeline so it survives a window reload. Debounced
+   * via the snapshot coalescer to avoid thrashing workspaceState on every
+   * streaming chunk.
+   */
+  async persistTimeline(): Promise<void> {
+    if (!this.memento) {
+      return;
+    }
+    const payload = {
+      sessionId: this.sessionId,
+      entries: this.reducer.entries,
+      workingSet: this.workingSet.list(),
+    };
+    await this.memento.update('dsh.timeline', payload);
+  }
+
+  /** Restores a persisted timeline (called once on activation). */
+  async restoreTimeline(): Promise<void> {
+    if (!this.memento) {
+      return;
+    }
+    const persisted = this.memento.get<{
+      sessionId?: string;
+      entries: TimelineEntry[];
+      workingSet: EditInfo[];
+    }>('dsh.timeline');
+    if (!persisted || !Array.isArray(persisted.entries) || persisted.entries.length === 0) {
+      return;
+    }
+    this.sessionId = persisted.sessionId;
+    this.reducer.restore(persisted.entries);
+    for (const edit of persisted.workingSet ?? []) {
+      this.workingSet.registerEdit(edit);
+    }
+    this.setStatus('disconnected');
+    this.logger.info(`Restored timeline: ${persisted.entries.length} entries`);
+  }
+
+  // -------------------------------------------------------------------------
+  // Public API (invoked from PanelController and commands)
+  // -------------------------------------------------------------------------
+
+  async submitPrompt(text: string, attachments: ContextAttachment[]): Promise<void> {
+    // Guard against double-fire while the kernel is still connecting: the
+    // composer Enter path can race the synchronous status change.
+    if (
+      this.status === 'connecting' ||
+      this.status === 'prompting' ||
+      this.status === 'awaitingApproval'
+    ) {
+      return;
+    }
+    const trimmed = text.trim();
+    const merged = this.mergeActiveSelection(attachments);
+    if (!trimmed && merged.length === 0) {
+      return;
+    }
+
+    try {
+      this.setStatus('connecting');
+      const handlers = await this.ensureKernel();
+
+      if (!this.sessionId) {
+        const handle = await this.backend.newSession(this.workspaceRoot(), handlers);
+        this.sessionId = handle.sessionId;
+        this.modes = handle.modes;
+        this.modeId = handle.modeId;
+        const defaultTitle = trimmed.slice(0, 60);
+        await this.sessions.upsert(handle.sessionId, defaultTitle);
+        await this.reloadHistory();
+        // R9: replace the truncated-default title with an AI-generated one.
+        void this.autoTitle(handle.sessionId, defaultTitle);
+      }
+
+      this.reducer.addUserMessage(trimmed, merged);
+      this.setStatus('prompting');
+
+      const blocks = this.buildPromptBlocks(trimmed, merged);
+      const stop = await this.backend.prompt(this.sessionId, blocks, handlers);
+      this.logger.info(`Prompt finished: ${stop}`);
+      this.setStatus('idle');
+      // Copilot agent-mode nicety: jump straight into the review loop when
+      // the turn produced pending edits.
+      if (this.settings.autoOpenReview && this.workingSet.pendingCount() > 0) {
+        void this.diffService.openNextPending();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error('Prompt failed', err instanceof Error ? err : undefined);
+      this.reducer.addError(message);
+      this.setStatus('error', message);
+    }
+  }
+
+  /**
+   * One-shot generation on an ephemeral session (git commit messages, etc).
+   * The capture is keyed to the ephemeral session id, so updates from the
+   * user's main chat session are never intercepted.
+   */
+  async oneShot(prompt: string): Promise<string> {
+    const capture: { text: string } = { text: '' };
+    let sessionId: string | undefined;
+    try {
+      const handlers = await this.ensureKernel();
+      const session = await this.backend.newSession(this.workspaceRoot(), handlers);
+      sessionId = session.sessionId;
+      this.captures.set(sessionId, capture);
+      await this.backend.prompt(sessionId, [{ type: 'text', text: prompt }], handlers);
+      return capture.text.trim();
+    } finally {
+      if (sessionId !== undefined) {
+        this.captures.delete(sessionId);
+      }
+    }
+  }
+
+  cancel(): void {
+    if (this.sessionId) {
+      this.backend.cancel(this.sessionId);
+    }
+  }
+
+  /** Re-establishes the kernel connection after a crash or error. */
+  async reconnect(): Promise<void> {
+    if (this.status === 'prompting' || this.status === 'awaitingApproval') {
+      return;
+    }
+    try {
+      this.setStatus('connecting');
+      await this.ensureKernel();
+      await this.reloadHistory();
+      this.setStatus('idle');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.reducer.addError(message);
+      this.setStatus('error', message);
+    }
+  }
+
+  async newChat(): Promise<void> {
+    this.sessionId = undefined;
+    this.modes = [];
+    this.modeId = undefined;
+    this.kernelCommands = [];
+    this.reducer.reset();
+    this.workingSet.clear();
+    if (this.memento) {
+      await this.memento.update('dsh.timeline', undefined);
+    }
+    this.setStatus('idle');
+  }
+
+  async loadSession(sessionId: string): Promise<void> {
+    try {
+      this.setStatus('connecting');
+      this.reducer.reset();
+      this.workingSet.clear();
+      const handlers = await this.ensureKernel();
+      const handle = await this.backend.loadSession(this.workspaceRoot(), sessionId, handlers);
+      this.sessionId = handle.sessionId;
+      this.modes = handle.modes;
+      this.modeId = handle.modeId;
+      this.setStatus('idle');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.reducer.addError(message);
+      this.setStatus('error', message);
+    }
+  }
+
+  /** Called by the PanelController when the user picks an approval option. */
+  async approve(approvalId: string, optionId: string): Promise<void> {
+    await this.approvals.resolve(approvalId, optionId);
+    this.scheduleSnapshot();
+  }
+
+  async setMode(modeId: string): Promise<void> {
+    if (!this.sessionId) {
+      return;
+    }
+    try {
+      await this.backend.setMode(this.sessionId, modeId);
+      this.modeId = modeId;
+      this.flushSnapshot();
+    } catch (err) {
+      this.logger.warn(`setMode failed: ${String(err)}`);
+    }
+  }
+
+  async authenticate(methodId: string): Promise<void> {
+    try {
+      await this.ensureKernel();
+      await this.backend.authenticate(methodId);
+      void vscode.window.showInformationMessage(l10n.t('DeepSeek Harness：认证完成。'));
+      this.flushSnapshot();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      void vscode.window.showErrorMessage(l10n.t('认证失败：{0}', message));
+    }
+  }
+
+  getSnapshot() {
+    const caps = this.backend.capabilities;
+    return buildSnapshot({
+      status: this.status,
+      statusDetail: this.statusDetail,
+      sessionId: this.sessionId,
+      entries: this.reducer.entries,
+      history: this.history,
+      workingSet: this.workingSet.list(),
+      kernelCommands: this.kernelCommands,
+      modes: this.modes,
+      modeId: this.modeId,
+      authMethods: caps.authMethods,
+      canLoadSession: caps.canLoadSession,
+    });
+  }
+
+  dispose(): void {
+    if (this.snapshotTimer) {
+      clearTimeout(this.snapshotTimer);
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Kernel handlers (the only place where ACP meets the domain model)
+  // -------------------------------------------------------------------------
+
+  private async ensureKernel(): Promise<KernelHandlers> {
+    if (!this.handlers) {
+      this.handlers = {
+        onSessionUpdate: (_sessionId, update) => this.onSessionUpdate(_sessionId, update),
+        onPermissionRequest: (req) => this.onPermissionRequest(req),
+        onReadTextFile: async (req) => ({ content: await this.readWorkspaceFile(req.path) }),
+        onWriteTextFile: async (req) => this.onKernelWrite(req.path, req.content),
+        onExit: () => undefined, // Crash handling goes through backend.onCrash.
+      };
+    }
+    await this.backend.ensureConnected(this.handlers);
+    return this.handlers;
+  }
+
+  private onSessionUpdate(sessionId: string, update: AcpSessionUpdate): void {
+    // Only intercept updates from one-shot ephemeral sessions themselves.
+    const capture = this.captures.get(sessionId);
+    if (capture) {
+      if (update.sessionUpdate === 'agent_message_chunk') {
+        capture.text += contentBlockText(update.content);
+      }
+      return;
+    }
+    const effects: TimelineEffect[] = this.reducer.apply(update);
+    for (const effect of effects) {
+      if (effect.type === 'editProposed') {
+        // Never overwrite an edit the user already decided on: kernels may
+        // re-emit diffs for the same toolCallId (corrections, retries).
+        const existing = this.workingSet.get(effect.edit.editId);
+        if (!existing || existing.state === 'pending') {
+          this.workingSet.registerEdit(effect.edit);
+        }
+      }
+    }
+    if (update.sessionUpdate === 'available_commands_update') {
+      this.kernelCommands = update.commands;
+    } else if (update.sessionUpdate === 'current_mode_update') {
+      this.modeId = update.currentModeId;
+    }
+    this.scheduleSnapshot();
+  }
+
+  /** Generates a concise session title on an ephemeral session (R9). */
+  private async autoTitle(sessionId: string, defaultTitle: string): Promise<void> {
+    try {
+      const generated = await this.oneShot(
+        `用不超过12个字概括这个开发请求的主题，只输出标题本身，不要标点结尾：${defaultTitle}`,
+      );
+      const title = generated.split('\n').map((l) => l.trim()).find((l) => l.length > 0);
+      if (title && title.length <= 20) {
+        await this.sessions.rename(sessionId, title);
+        await this.reloadHistory();
+      }
+    } catch {
+      // Title generation is best-effort; keep the default title.
+    }
+  }
+
+  private async onPermissionRequest(req: AcpPermissionRequest): Promise<AcpPermissionOutcome> {
+    const toolTitle = req.toolCall.title ?? l10n.t('代理');
+    const request: ApprovalRequest = {
+      approvalId: `appr-${req.toolCall.toolCallId}`,
+      toolCallId: req.toolCall.toolCallId,
+      title: l10n.t('{0} 需要权限', toolTitle),
+      options: req.options.map((option) => ({
+        optionId: option.optionId,
+        label: option.name,
+        kind: option.kind,
+      })),
+      state: 'pending',
+    };
+    this.reducer.addApproval(request);
+    this.status = 'awaitingApproval';
+    this.flushSnapshot();
+
+    const chosen = await this.approvals.awaitChoice(request);
+    this.reducer.resolveApproval(request.approvalId, chosen ?? '');
+    // Judge by the CURRENT status, not the snapshot from when the request
+    // arrived: the turn may have been cancelled while we were waiting.
+    if (this.status === 'awaitingApproval') {
+      this.status = 'prompting';
+    }
+    this.scheduleSnapshot();
+
+    if (!chosen) {
+      return { outcome: 'cancelled' };
+    }
+    return { outcome: 'selected', optionId: chosen };
+  }
+
+  /**
+   * The kernel asked us to persist a file. Apply it immediately (the actual
+   * permission was granted through request_permission) and register the edit
+   * in the working set so the user can review or revert it.
+   */
+  private async onKernelWrite(absolutePath: string, content: string): Promise<void> {
+    const previous = await this.diffService.readCurrent(absolutePath);
+    await this.diffService.writeFile(absolutePath, content);
+    const edit: EditInfo = this.diffService.buildFsWriteEdit(
+      `edit-fs-${Math.random().toString(36).slice(2)}`,
+      absolutePath,
+      content,
+      previous,
+    );
+    this.workingSet.registerEdit(edit);
+    this.reducer.registerEdit(edit);
+    this.scheduleSnapshot();
+  }
+
+  private async readWorkspaceFile(absolutePath: string): Promise<string> {
+    const data = await vscode.workspace.fs.readFile(vscode.Uri.file(absolutePath));
+    return new TextDecoder().decode(data);
+  }
+
+  // -------------------------------------------------------------------------
+  // internals
+  // -------------------------------------------------------------------------
+
+  /**
+   * Copilot-style behavior: silently attach the active editor selection
+   * unless the user already attached context. Opt out via settings.
+   */
+  private mergeActiveSelection(attachments: ContextAttachment[]): ContextAttachment[] {
+    if (!this.settings.attachActiveSelection) {
+      return attachments;
+    }
+    if (attachments.some((a) => a.kind === 'selection')) {
+      return attachments;
+    }
+    const active = this.contexts.fromActiveEditor(true);
+    if (!active || !active.selectionText) {
+      return attachments;
+    }
+    return [...attachments, active];
+  }
+
+  private setStatus(status: SessionStatus, detail?: string): void {
+    this.status = status;
+    this.statusDetail = detail;
+    this.flushSnapshot();
+  }
+
+  private flushSnapshot(): void {
+    const payload: ToWebview = { type: 'snapshot', payload: this.getSnapshot() };
+    this.postToPanel(payload);
+    // Persist after the user-visible push; failures are logged not thrown.
+    void this.persistTimeline().catch((err) => {
+      this.logger.warn(`Timeline persist failed: ${String(err)}`);
+    });
+  }
+
+  private scheduleSnapshot(): void {
+    if (this.snapshotTimer) {
+      return;
+    }
+    this.snapshotTimer = setTimeout(() => {
+      this.snapshotTimer = undefined;
+      this.flushSnapshot();
+    }, SNAPSHOT_COALESCE_MS);
+  }
+
+  private postToPanel(message: ToWebview): void {
+    this.panelSink?.(message);
+  }
+
+  private buildPromptBlocks(text: string, attachments: ContextAttachment[]): PromptContentBlock[] {
+    const blocks: PromptContentBlock[] = [];
+    for (const attachment of attachments) {
+      blocks.push({
+        type: 'resource_link',
+        uri: attachment.absolutePath ?? attachment.path,
+        name: attachment.label,
+      });
+    }
+    const parts: string[] = [];
+    for (const attachment of attachments) {
+      if (attachment.selectionText) {
+        const lines = attachment.range
+          ? ` (lines ${attachment.range.startLine}-${attachment.range.endLine})`
+          : '';
+        const lang = path.extname(attachment.path).replace('.', '') || '';
+        parts.push(
+          `Attached context: ${attachment.path}${lines}\n\`\`\`${lang}\n${attachment.selectionText}\n\`\`\``,
+        );
+      } else {
+        parts.push(`Attached context: ${attachment.path}`);
+      }
+    }
+    parts.push(text);
+    blocks.push({ type: 'text', text: parts.join('\n\n') });
+    return blocks;
+  }
+
+  private workspaceRoot(): string {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+      throw new Error(l10n.t('请先打开一个文件夹再与代理对话'));
+    }
+    if (folders.length === 1) {
+      return folders[0]!.uri.fsPath;
+    }
+    // Multi-root: prefer the folder containing the active editor, else the first.
+    const activeUri = vscode.window.activeTextEditor?.document.uri;
+    if (activeUri) {
+      const containing = vscode.workspace.getWorkspaceFolder(activeUri);
+      if (containing) {
+        return containing.uri.fsPath;
+      }
+    }
+    return folders[0]!.uri.fsPath;
+  }
+}

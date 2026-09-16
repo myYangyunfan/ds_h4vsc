@@ -1,0 +1,20 @@
+{
+  "name": "@dsh-vscode/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared protocol contracts, domain models and pure logic for the DeepSeek Harness VS Code extension.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
+}

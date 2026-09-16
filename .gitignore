@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Local kernel test install
+.kern-test/
+
+# Build outputs
+dist/
+out/
+*.tsbuildinfo
+*.vsix
+
+# Generated at build time from @vscode/codicons by
+# packages/webview-ui/scripts/copy-codicons.mjs - never edit by hand.
+packages/webview-ui/public/codicons/
+
+# Test artifacts
+coverage/
+test-results/
+
+# Secrets - the API key belongs in VS Code SecretStorage, never in a file
+.env
+.env.*
+*.local
+
+# Editor / OS
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.qoder/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*

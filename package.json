@@ -1,0 +1,36 @@
+{
+  "name": "dsh-vscode-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DeepSeek Harness for VS Code - AI coding agent powered by the official open-source DeepSeek Harness (dsh), integrated via the Agent Client Protocol.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "keytar", "@vscode/vsce-sign"]
+  },
+  "scripts": {
+    "build": "pnpm --filter @dsh-vscode/webview-ui run build && pnpm --filter deepseek-harness run build",
+    "compile": "pnpm build",
+    "watch": "pnpm --filter deepseek-harness run watch",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "eslint .",
+    "test": "pnpm -r run test",
+    "package": "pnpm build && pnpm --filter deepseek-harness run package",
+    "vsce:package": "pnpm package",
+    "clean": "pnpm -r run clean"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.35.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^15.15.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.0",
+    "vitest": "^3.2.4"
+  }
+}

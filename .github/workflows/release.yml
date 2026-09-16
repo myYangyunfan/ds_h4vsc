@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Package and publish to the Marketplace
+    runs-on: ubuntu-latest
+    environment: marketplace
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify
+        run: |
+          pnpm typecheck
+          pnpm test
+          pnpm build
+
+      - name: Package VSIX
+        run: pnpm vsce:package
+
+      - name: Publish to the VS Code Marketplace
+        if: ${{ secrets.VSCE_PAT != '' }}
+        working-directory: packages/extension
+        run: npx vsce publish --no-dependencies
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packages/extension/dist/deepseek-harness.vsix
+          generate_release_notes: true

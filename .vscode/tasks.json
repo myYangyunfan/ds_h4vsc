@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "npm",
+      "script": "build",
+      "path": ".",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$esbuild",
+      "isBackground": false
+    },
+    {
+      "label": "watch:extension",
+      "type": "npm",
+      "script": "watch",
+      "path": "packages/extension",
+      "isBackground": true,
+      "problemMatcher": "$esbuild"
+    },
+    {
+      "label": "watch:webview",
+      "type": "npm",
+      "script": "dev",
+      "path": "packages/webview-ui",
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

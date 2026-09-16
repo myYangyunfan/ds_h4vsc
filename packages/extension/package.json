@@ -1,0 +1,388 @@
+{
+  "name": "deepseek-harness",
+  "displayName": "DeepSeek Harness",
+  "description": "%ext.description%",
+  "version": "0.8.0",
+  "publisher": "dsh-tools",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/deepseek_harness"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/deepseek_harness/issues"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": ["AI", "Chat", "Programming Languages"],
+  "keywords": ["ai", "agent", "deepseek", "harness", "chat", "copilot", "coding assistant"],
+  "activationEvents": ["onView:dsh.chat"],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dsh",
+          "title": "DeepSeek Harness",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "dsh": [
+        {
+          "type": "webview",
+          "id": "dsh.chat",
+          "name": "%view.chat%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "dsh.newChat",
+        "title": "%cmd.newChat%",
+        "category": "%category%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "dsh.chat.resume",
+        "title": "%cmd.resume%",
+        "category": "%category%",
+        "icon": "$(history)"
+      },
+      {
+        "command": "dsh.chat.focus",
+        "title": "%cmd.focus%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.chat.addToChat",
+        "title": "%cmd.addToChat%",
+        "category": "%category%",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "dsh.chat.explainSelection",
+        "title": "%cmd.explainSelection%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.reviewChanges",
+        "title": "%cmd.reviewChanges%",
+        "category": "%category%",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "dsh.chat.inlineEdit",
+        "title": "%cmd.inlineEdit%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.exportChat",
+        "title": "%cmd.exportChat%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.renameSession",
+        "title": "%cmd.renameSession%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.deleteSession",
+        "title": "%cmd.deleteSession%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.gitCommitMessage",
+        "title": "%cmd.gitCommitMessage%",
+        "category": "%category%",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "dsh.copyDiagnostics",
+        "title": "%cmd.copyDiagnostics%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.verify",
+        "title": "%cmd.verify%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.statusMenu",
+        "title": "%cmd.statusMenu%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.acceptCurrentEdit",
+        "title": "%cmd.acceptCurrentEdit%",
+        "category": "%category%",
+        "icon": "$(check)"
+      },
+      {
+        "command": "dsh.rejectCurrentEdit",
+        "title": "%cmd.rejectCurrentEdit%",
+        "category": "%category%",
+        "icon": "$(close)"
+      },
+      {
+        "command": "dsh.chat.explainClipboard",
+        "title": "%cmd.explainClipboard%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.createAgentsFile",
+        "title": "%cmd.createAgentsFile%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.quickAsk",
+        "title": "%cmd.quickAsk%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.chat.refactorSelection",
+        "title": "%cmd.refactorSelection%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.chat.explainProblem",
+        "title": "%cmd.explainProblem%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.setApiKey",
+        "title": "%cmd.setApiKey%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.clearApiKey",
+        "title": "%cmd.clearApiKey%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.showApiKeyStatus",
+        "title": "%cmd.showApiKeyStatus%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.installKernel",
+        "title": "%cmd.installKernel%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.showLogs",
+        "title": "%cmd.showLogs%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.openSettings",
+        "title": "%cmd.openSettings%",
+        "category": "%category%"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dsh.newChat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dsh.chat.resume",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "dsh.chat.addToChat",
+          "group": "dsh@1"
+        },
+        {
+          "command": "dsh.chat.explainSelection",
+          "when": "editorHasSelection",
+          "group": "dsh@2"
+        },
+        {
+          "command": "dsh.chat.refactorSelection",
+          "when": "editorHasSelection",
+          "group": "dsh@3"
+        }
+      ],
+      "problems/context": [
+        {
+          "command": "dsh.chat.explainProblem",
+          "group": "dsh@1"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "dsh.gitCommitMessage",
+          "when": "scmProvider == git",
+          "group": "navigation@-1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "dsh.chat.addToChat",
+          "group": "navigation@9"
+        },
+        {
+          "command": "dsh.acceptCurrentEdit",
+          "when": "resourceScheme == dsh-edit",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dsh.rejectCurrentEdit",
+          "when": "resourceScheme == dsh-edit",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "dsh.chat.focus",
+        "key": "ctrl+alt+d",
+        "mac": "cmd+alt+d"
+      },
+      {
+        "command": "dsh.newChat",
+        "key": "ctrl+alt+n",
+        "mac": "cmd+alt+n"
+      },
+      {
+        "command": "dsh.reviewChanges",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r"
+      },
+      {
+        "command": "dsh.chat.inlineEdit",
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k"
+      },
+      {
+        "command": "dsh.chat.explainSelection",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "dsh.getStarted",
+        "title": "%walkthrough.title%",
+        "description": "%walkthrough.description%",
+        "steps": [
+          {
+            "id": "openChat",
+            "title": "%walkthrough.openChat.title%",
+            "description": "%walkthrough.openChat.description%",
+            "media": { "markdown": "media/walkthrough/open-chat.md" },
+            "completionEvents": ["onCommand:dsh.chat.focus"]
+          },
+          {
+            "id": "setup",
+            "title": "%walkthrough.setup.title%",
+            "description": "%walkthrough.setup.description%",
+            "media": { "markdown": "media/walkthrough/setup.md" },
+            "completionEvents": ["onCommand:dsh.setApiKey"]
+          },
+          {
+            "id": "review",
+            "title": "%walkthrough.review.title%",
+            "description": "%walkthrough.review.description%",
+            "media": { "markdown": "media/walkthrough/review.md" },
+            "completionEvents": ["onCommand:dsh.reviewChanges"]
+          },
+          {
+            "id": "shortcuts",
+            "title": "%walkthrough.shortcuts.title%",
+            "description": "%walkthrough.shortcuts.description%",
+            "media": { "markdown": "media/walkthrough/shortcuts.md" },
+            "completionEvents": ["onCommand:dsh.chat.focus"]
+          }
+        ]
+      }
+    ],
+    "configuration": [
+      {
+        "title": "%category%",
+        "properties": {
+          "dsh.executablePath": {
+            "type": "string",
+            "default": "",
+            "description": "%setting.executablePath%"
+          },
+          "dsh.preferredVersion": {
+            "type": "string",
+            "default": "",
+            "description": "%setting.preferredVersion%"
+          },
+          "dsh.acpArgs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": ["--profile", "acp"],
+            "description": "%setting.acpArgs%"
+          },
+          "dsh.acpProfile": {
+            "type": "string",
+            "default": "acp",
+            "description": "%setting.acpProfile%"
+          },
+          "dsh.acpPluginPackage": {
+            "type": "string",
+            "default": "@deepseek-ai/dsh-acp-app",
+            "description": "%setting.acpPluginPackage%"
+          },
+          "dsh.model": {
+            "type": "string",
+            "default": "",
+            "description": "%setting.model%"
+          },
+          "dsh.homeDir": {
+            "type": "string",
+            "default": "",
+            "description": "%setting.homeDir%"
+          },
+          "dsh.autoApproveReadOnly": {
+            "type": "boolean",
+            "default": false,
+            "description": "%setting.autoApproveReadOnly%"
+          },
+          "dsh.attachActiveSelection": {
+            "type": "boolean",
+            "default": true,
+            "description": "%setting.attachActiveSelection%"
+          },
+          "dsh.autoOpenReview": {
+            "type": "boolean",
+            "default": true,
+            "description": "%setting.autoOpenReview%"
+          }
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify:kernel": "node scripts/verify-kernel.mjs",
+    "package": "vsce package --no-dependencies -o dist/deepseek-harness.vsix",
+    "vsce:publish": "vsce publish --no-dependencies",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^1.4.0",
+    "@dsh-vscode/core": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.100.0",
+    "@vscode/vsce": "^3.3.0",
+    "esbuild": "^0.25.0",
+    "vitest": "^3.2.4"
+  }
+}
