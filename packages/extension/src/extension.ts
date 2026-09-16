@@ -17,7 +17,7 @@ import { ApprovalBridge } from './approval/ApprovalBridge.js';
 import { ContextService } from './editor/ContextService.js';
 import { DiffService } from './editor/DiffService.js';
 import { WorkingSet } from './editor/WorkingSet.js';
-import { CHAT_VIEW_ID, PanelController } from './ui/PanelController.js';
+import { CHAT_SIDEBAR_VIEW_ID, CHAT_VIEW_ID, PanelController } from './ui/PanelController.js';
 import { StatusItem } from './statusbar/StatusItem.js';
 import { DisposableBag } from './util/dispose.js';
 import { Logger } from './util/log.js';
@@ -68,19 +68,43 @@ export function activate(context: vscode.ExtensionContext): void {
     hasApiKey: () => getApiKey(context.secrets).then((key) => Boolean(key)),
   });
 
+  // The chat lives in two containers that share one session: the secondary
+  // (right) side bar and the activity bar. Registering the same provider for
+  // both keeps either entry point usable and in sync.
   bag.push(
     vscode.window.registerWebviewViewProvider(CHAT_VIEW_ID, panel, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
   );
+  bag.push(
+    vscode.window.registerWebviewViewProvider(CHAT_SIDEBAR_VIEW_ID, panel, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+  );
 
-  // Keep status bar in sync with the session state machine (snapshots drive it).
-  bag.push(vscode.commands.registerCommand('dsh.chat.focus', async () => {
-    await vscode.commands.executeCommand(`${CHAT_VIEW_ID}.focus`);
+  /**
+   * Reveals the chat panel. VS Code auto-registers `<viewId>.focus` for every
+   * contributed view and that command resolves with a view object which cannot
+   * be sent back over the extension host RPC boundary ("An object could not be
+   * cloned."), so its result must never be propagated. Every caller goes
+   * through here for that reason. Note this deliberately does not register a
+   * command named `dsh.chat.focus`: that id already belongs to the generated
+   * view command, and shadowing it made the handler call itself.
+   */
+  async function revealChat(): Promise<void> {
+    try {
+      await vscode.commands.executeCommand(`${CHAT_VIEW_ID}.focus`);
+    } catch (err) {
+      logger.warn(`Could not focus the chat view: ${String(err)}`);
+    }
+  }
+
+  bag.push(vscode.commands.registerCommand('dsh.chat.openPanel', async () => {
+    await revealChat();
   }));
   bag.push(vscode.commands.registerCommand('dsh.newChat', async () => {
     await service.newChat();
-    await vscode.commands.executeCommand(`${CHAT_VIEW_ID}.focus`);
+    await revealChat();
   }));
   bag.push(vscode.commands.registerCommand('dsh.chat.resume', async () => {
     const history = await sessions.list();
@@ -106,7 +130,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(l10n.t('打开一个文件即可将其加入对话。'));
       return;
     }
-    await vscode.commands.executeCommand(`${CHAT_VIEW_ID}.focus`);
+    await revealChat();
     panel.addContext(attachment);
   }));
   // Shared flow for selection-driven prompts (commands + code actions).
@@ -116,7 +140,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(l10n.t('请先选中要解释的代码。'));
       return;
     }
-    await vscode.commands.executeCommand(`${CHAT_VIEW_ID}.focus`);
+    await revealChat();
     panel.addContext(attachment);
     await service.submitPrompt(prompt, [attachment] as ContextAttachment[]);
   }
@@ -160,7 +184,7 @@ export function activate(context: vscode.ExtensionContext): void {
       label: l10n.t('问题诊断'),
       selectionText: text,
     };
-    await vscode.commands.executeCommand(`${CHAT_VIEW_ID}.focus`);
+    await revealChat();
     panel.addContext(attachment);
     await service.submitPrompt(
       '请分析附件中的诊断信息，定位根因并给出修复方案（可直接修改文件）。',
@@ -379,7 +403,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(l10n.t('剪贴板为空。'));
       return;
     }
-    await vscode.commands.executeCommand(`${CHAT_VIEW_ID}.focus`);
+    await revealChat();
     await service.submitPrompt(
       `请解释下面这段报错的原因并给出修复方案：\n\n${clip.slice(0, 4_000)}`,
       [],
@@ -425,7 +449,7 @@ export function activate(context: vscode.ExtensionContext): void {
       ignoreFocusOut: true,
     });
     if (question?.trim()) {
-      await vscode.commands.executeCommand(`${CHAT_VIEW_ID}.focus`);
+      await revealChat();
       await service.submitPrompt(question.trim(), []);
     }
   }));

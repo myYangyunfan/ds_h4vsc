@@ -18,16 +18,23 @@
   },
   "categories": ["AI", "Chat", "Programming Languages"],
   "keywords": ["ai", "agent", "deepseek", "harness", "chat", "copilot", "coding assistant"],
-  "activationEvents": ["onView:dsh.chat"],
+  "activationEvents": ["onView:dsh.chat", "onView:dsh.chatSidebar"],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
+          "id": "dsh-sidebar",
+          "title": "DeepSeek Harness",
+          "icon": "media/icon.svg"
+        }
+      ],
+      "secondarySidebar": [
+        {
           "id": "dsh",
           "title": "DeepSeek Harness",
-          "icon": "media/icon.png"
+          "icon": "media/icon.svg"
         }
       ]
     },
@@ -36,6 +43,13 @@
         {
           "type": "webview",
           "id": "dsh.chat",
+          "name": "%view.chat%"
+        }
+      ],
+      "dsh-sidebar": [
+        {
+          "type": "webview",
+          "id": "dsh.chatSidebar",
           "name": "%view.chat%"
         }
       ]
@@ -54,9 +68,10 @@
         "icon": "$(history)"
       },
       {
-        "command": "dsh.chat.focus",
-        "title": "%cmd.focus%",
-        "category": "%category%"
+        "command": "dsh.chat.openPanel",
+        "title": "%cmd.openPanel%",
+        "category": "%category%",
+        "icon": "media/icon.svg"
       },
       {
         "command": "dsh.chat.addToChat",
@@ -226,6 +241,10 @@
       ],
       "editor/title": [
         {
+          "command": "dsh.chat.openPanel",
+          "group": "navigation@0"
+        },
+        {
           "command": "dsh.chat.addToChat",
           "group": "navigation@9"
         },
@@ -243,7 +262,7 @@
     },
     "keybindings": [
       {
-        "command": "dsh.chat.focus",
+        "command": "dsh.chat.openPanel",
         "key": "ctrl+alt+d",
         "mac": "cmd+alt+d"
       },
@@ -279,7 +298,7 @@
             "title": "%walkthrough.openChat.title%",
             "description": "%walkthrough.openChat.description%",
             "media": { "markdown": "media/walkthrough/open-chat.md" },
-            "completionEvents": ["onCommand:dsh.chat.focus"]
+            "completionEvents": ["onCommand:dsh.chat.openPanel"]
           },
           {
             "id": "setup",
@@ -300,7 +319,7 @@
             "title": "%walkthrough.shortcuts.title%",
             "description": "%walkthrough.shortcuts.description%",
             "media": { "markdown": "media/walkthrough/shortcuts.md" },
-            "completionEvents": ["onCommand:dsh.chat.focus"]
+            "completionEvents": ["onCommand:dsh.chat.openPanel"]
           }
         ]
       }

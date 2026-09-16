@@ -3,12 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import './styles/base.css';
-
-// Standalone preview outside VS Code has no injected --vscode-* variables;
-// load the dark fallback theme so the panel still looks like itself.
-if (!('acquireVsCodeApi' in window)) {
-  void import('./styles/dev-theme.css');
-}
+// Dark fallback palette for standalone preview outside VS Code. Imported
+// statically (never via `import()`): a dynamic import makes Vite emit
+// `import.meta`, which the extension host cannot load as a classic script.
+// The stylesheet scopes itself to `body.dsh-standalone`, so it stays inert
+// inside the real webview.
+import './styles/dev-theme.css';
 
 const container = document.getElementById('root');
 if (!container) {

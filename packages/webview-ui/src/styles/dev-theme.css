@@ -1,10 +1,14 @@
 /*
  * Fallback VS Code Dark-style palette for standalone preview (`vite dev` /
- * `vite preview` outside of VS Code). Inside a real webview VS Code injects
- * the --vscode-* custom properties itself and this file is never loaded
- * (see the dynamic import in main.tsx).
+ * `vite preview` outside of VS Code).
+ *
+ * Scoped to `body.dsh-standalone`, a class only the standalone entry HTML
+ * carries. Inside a real webview VS Code injects the --vscode-* properties
+ * for the active theme, so this block must never match there - do NOT scope
+ * it to `:root` or to a `vscode-*` body class, both of which also occur in
+ * the panel inside VS Code.
  */
-:root {
+body.dsh-standalone {
   --vscode-font-family: 'Segoe WPC', 'Segoe UI', system-ui, sans-serif;
   --vscode-font-size: 13px;
   --vscode-sideBar-background: #181818;

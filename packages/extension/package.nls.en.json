@@ -4,7 +4,7 @@
   "view.chat": "Chat",
   "cmd.newChat": "New Chat",
   "cmd.resume": "Resume Session",
-  "cmd.focus": "Open Chat",
+  "cmd.openPanel": "Open Chat Panel on the Right",
   "cmd.addToChat": "Add File to DeepSeek Harness Chat",
   "cmd.explainSelection": "Explain Selection with DeepSeek Harness",
   "cmd.reviewChanges": "Review Changes One by One",

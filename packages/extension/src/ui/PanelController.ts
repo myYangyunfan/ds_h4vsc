@@ -27,7 +27,17 @@ import type { DiffService } from '../editor/DiffService.js';
 import type { StatusItem } from '../statusbar/StatusItem.js';
 import type { Logger } from '../util/log.js';
 
+/**
+ * The chat panel in the secondary (right) side bar. This is the primary
+ * placement, so it keeps the original view id and every command targets it.
+ */
 export const CHAT_VIEW_ID = 'dsh.chat';
+/**
+ * The same chat in the activity bar. Contributing a second container keeps a
+ * permanent icon on the left; VS Code cannot place one view in two containers,
+ * so this is a distinct view id served by the same provider.
+ */
+export const CHAT_SIDEBAR_VIEW_ID = 'dsh.chatSidebar';
 
 export interface PanelDeps {
   extensionVersion: string;
@@ -41,7 +51,12 @@ export interface PanelDeps {
 }
 
 export class PanelController implements vscode.WebviewViewProvider {
-  private view: vscode.WebviewView | undefined;
+  /**
+   * Every live host for this chat - the view in the secondary side bar and the
+   * one in the activity bar. They share one session, so each push and each
+   * inbound message is handled identically for all of them.
+   */
+  private readonly views = new Set<vscode.WebviewView>();
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -49,7 +64,8 @@ export class PanelController implements vscode.WebviewViewProvider {
   ) {}
 
   async resolveWebviewView(view: vscode.WebviewView): Promise<void> {
-    this.view = view;
+    this.views.add(view);
+    view.onDidDispose(() => this.views.delete(view));
     view.webview.options = {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
@@ -280,7 +296,7 @@ export class PanelController implements vscode.WebviewViewProvider {
   }
 
   private post(message: ToWebview): void {
-    if (this.view?.webview) {
+    if (this.views.size > 0) {
       this.postNow(message);
     }
     // Keep the status bar in lock-step with every snapshot push.
@@ -295,7 +311,7 @@ export class PanelController implements vscode.WebviewViewProvider {
   }
 
   private postNow(message: ToWebview): void {
-    if (!this.view?.webview) {
+    if (this.views.size === 0) {
       return;
     }
     // The postMessage channel rejects non-plain data ("An object could not
@@ -312,12 +328,11 @@ export class PanelController implements vscode.WebviewViewProvider {
       );
       return;
     }
-    this.view.webview.postMessage(safe).then(
-      undefined,
-      (err) => {
+    for (const view of this.views) {
+      view.webview.postMessage(safe).then(undefined, (err) => {
         this.deps.logger.error(`postMessage failed (${message.type})`, err instanceof Error ? err : undefined);
-      },
-    );
+      });
+    }
   }
 
   private buildHtml(webview: vscode.Webview): string {
@@ -351,7 +366,7 @@ export class PanelController implements vscode.WebviewViewProvider {
 </head>
 <body class="dsh-root">
   <div id="root"></div>
-  <script nonce="${nonce}" src="${jsUri}"></script>
+  <script type="module" nonce="${nonce}" src="${jsUri}"></script>
 </body>
 </html>`;
   }
