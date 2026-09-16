@@ -46,7 +46,6 @@
   "重命名会话": "Rename session",
   "输入新的会话标题": "Enter a new session title",
   "选择要删除的会话": "Select a session to delete",
-  "确认删除会话“{0}？": "Delete session \"{0}\"?",
   "删除": "Delete",
   "正在读取 Git 差异…": "Reading git diff…",
   "没有可用的 Git 差异。": "No git diff available.",
@@ -65,5 +64,15 @@
   "检测到尚未创建 AGENTS.md 项目规则文件，要让代理更好地理解这个仓库吗？": "No AGENTS.md project rules found. Create one so the agent understands this repo better?",
   "正在验证内核连接…": "Verifying kernel connection…",
   "内核验证通过（会话 {0}）": "Kernel verification passed (session {0})",
-  "内核验证失败：{0}": "Kernel verification failed: {0}"
+  "内核验证失败：{0}": "Kernel verification failed: {0}",
+  "打开会话": "Open Session",
+  "刚刚": "just now",
+  "{0} 分钟前": "{0} min ago",
+  "{0} 小时前": "{0} h ago",
+  "{0} 天前": "{0} d ago",
+  "确认删除会话“{0}”？": "Delete session \"{0}\"?",
+  "新对话": "New Chat",
+  "创建": "Create",
+  "打开设置": "Open Settings",
+  "逐个审查变更": "Review Changes One by One"
 }

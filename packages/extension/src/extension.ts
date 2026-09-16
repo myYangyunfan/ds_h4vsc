@@ -18,6 +18,7 @@ import { ContextService } from './editor/ContextService.js';
 import { DiffService } from './editor/DiffService.js';
 import { WorkingSet } from './editor/WorkingSet.js';
 import { CHAT_VIEW_ID, PanelController } from './ui/PanelController.js';
+import { SESSIONS_VIEW_ID, SessionsView } from './sessions/SessionsView.js';
 import { StatusItem } from './statusbar/StatusItem.js';
 import { DisposableBag } from './util/dispose.js';
 import { Logger } from './util/log.js';
@@ -108,6 +109,41 @@ export function activate(context: vscode.ExtensionContext): void {
   bag.push(vscode.commands.registerCommand('dsh.chat.openPanel', async () => {
     await revealChat();
   }));
+
+  // The sessions list in the activity bar. Selecting an entry reopens it in the
+  // panel on the right, so the left icon is a real navigation surface instead of
+  // a second, differently-placed copy of the chat.
+  const sessionsView = new SessionsView({
+    store: sessions,
+    open: async (sessionId) => {
+      await service.loadSession(sessionId);
+      await revealChat();
+    },
+    reloadHistory: () => service.reloadHistory(),
+  });
+  bag.push(
+    vscode.window.createTreeView(SESSIONS_VIEW_ID, {
+      treeDataProvider: sessionsView,
+      showCollapseAll: false,
+    }),
+  );
+  bag.push({ dispose: sessions.onChange(() => sessionsView.refresh()) });
+  bag.push(
+    vscode.commands.registerCommand('dsh.sessions.open', (node: unknown) => sessionsView.open(node)),
+  );
+  bag.push(
+    vscode.commands.registerCommand('dsh.sessions.rename', (node: unknown) => sessionsView.rename(node)),
+  );
+  bag.push(
+    vscode.commands.registerCommand('dsh.sessions.delete', (node: unknown) => sessionsView.remove(node)),
+  );
+  bag.push(
+    vscode.commands.registerCommand('dsh.sessions.refresh', async () => {
+      await service.reloadHistory();
+      sessionsView.refresh();
+    }),
+  );
+
   bag.push(vscode.commands.registerCommand('dsh.newChat', async () => {
     await service.newChat();
     await revealChat();

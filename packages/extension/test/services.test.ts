@@ -75,4 +75,27 @@ describe('SessionStore', () => {
     await store.remove('s1');
     expect(await store.list()).toHaveLength(1);
   });
+
+  it('notifies listeners on every history change, and stops after unsubscribe', async () => {
+    const store = new SessionStore(memoryMemento());
+    let changes = 0;
+    const unsubscribe = store.onChange(() => {
+      changes += 1;
+    });
+
+    await store.upsert('s1', 'A');
+    expect(changes).toBe(1);
+    await store.rename('s1', 'B');
+    expect(changes).toBe(2);
+    await store.remove('s1');
+    expect(changes).toBe(3);
+
+    // A rename of an unknown session changes nothing, so nothing is announced.
+    await store.rename('missing', 'B');
+    expect(changes).toBe(3);
+
+    unsubscribe();
+    await store.upsert('s2', 'C');
+    expect(changes).toBe(3);
+  });
 });

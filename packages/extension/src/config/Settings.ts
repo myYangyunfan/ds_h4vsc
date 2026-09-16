@@ -17,8 +17,7 @@ export interface DshSettings {
   readonly acpProfile: string;
   /** Kernel plugin that provides the ACP server; version-paired on install. */
   readonly acpPluginPackage: string;
-  readonly model?: string;
-  /** Overrides the dsh home directory (config.toml, sessions, credentials). */
+  /** Passed to the kernel as DSH_HOME; relocates sessions and credentials. */
   readonly homeDir?: string;
   /** Auto-approve read-only tool calls (read/search/think/fetch). */
   readonly autoApproveReadOnly: boolean;
@@ -31,7 +30,6 @@ export interface DshSettings {
 export function readSettings(): DshSettings {
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
   const executablePath = config.get<string>('executablePath');
-  const model = config.get<string>('model');
   const homeDir = config.get<string>('homeDir');
   return {
     executablePath: executablePath?.trim() ? executablePath.trim() : undefined,
@@ -39,7 +37,6 @@ export function readSettings(): DshSettings {
     acpArgs: config.get<string[]>('acpArgs') ?? ['--profile', 'acp'],
     acpProfile: config.get<string>('acpProfile')?.trim() || 'acp',
     acpPluginPackage: config.get<string>('acpPluginPackage')?.trim() || '@deepseek-ai/dsh-acp-app',
-    model: model?.trim() ? model.trim() : undefined,
     homeDir: homeDir?.trim() ? homeDir.trim() : undefined,
     autoApproveReadOnly: config.get<boolean>('autoApproveReadOnly') ?? false,
     attachActiveSelection: config.get<boolean>('attachActiveSelection') ?? true,

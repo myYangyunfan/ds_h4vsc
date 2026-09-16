@@ -2,6 +2,16 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.8.2 — 会话列表、设置区与 ACP 方法修正
+
+1. **修复 `Method not found: session/load`**：内核声明的是 `sessionCapabilities.resume`，对应 `session/resume`，扩展却把它当成 `session/load` 可用的依据。两者是不同方法，`session/load` 在 `SessionCapabilities` 里根本没有对应字段。现在按内核实际声明选择方法，恢复会话不再报错
+2. **回归测试**：mock agent 改为镜像真实内核的能力声明（只给 resume、不实现 load），新增用例会在方法选错时以同样的 `Method not found` 失败
+3. **左侧新增会话列表**：活动栏图标下是原生 TreeView，列出本工作区历史会话与相对时间；点选即在**右侧**面板继续，支持行内重命名/删除、标题栏刷新。空列表时用 `viewsWelcome` 做首次引导
+4. **`dsh.homeDir` 真正生效**：此前只被读进配置对象、从未传给内核。现以 `DSH_HOME` 传给内核进程（内核按 `process.env.DSH_HOME || 默认目录` 解析），会话、凭据与附件随之迁移
+5. **移除 `dsh.model`**：内核没有可用的模型覆盖机制，该设置纯粹是空转，删掉以免误导
+6. **设置区分组**：10 项平铺改为 3 个可折叠分组（内核 / 交互 / ACP 连接·高级），每项加 `order`；重写 `acpArgs`、`acpPluginPackage`、`preferredVersion`、`homeDir` 的描述，写清默认值与失败表现（如插件与内核版本不匹配表现为握手超时）
+7. **修正本地化缺陷**：`确认删除会话“{0}”？` 的英文键缺少右引号，另有 4 个 `l10n.t()` 字符串（新对话、创建、打开设置、逐个审查变更）从未登记进 bundle——两者都会让英文界面**静默回退成中文**。新增 `test/localization.test.ts` 作为门禁：校验清单占位符双向可解析、无未使用键、中英键集合一致且无未翻译项、每个 `l10n.t()` 键均已登记、每个贡献视图都有对应的激活事件
+
 ## 0.8.1 — 修复面板空白与入口
 
 1. **面板永久空白（根因）**：webview 产物里含 `import.meta`（来自对 dev-theme.css 的动态 import），而宿主用普通 `<script>` 加载，属于语法错误，整包解析失败、React 从未挂载。脚本标签改为 `type="module"`，备用主题改静态引入并收拢到 `body.dsh-standalone`（真实 webview 的 body 是 `dsh-root`，不会污染主题）

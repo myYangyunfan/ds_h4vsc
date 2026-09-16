@@ -2,7 +2,7 @@
   "name": "deepseek-harness",
   "displayName": "DeepSeek Harness",
   "description": "%ext.description%",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "publisher": "dsh-tools",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -18,11 +18,18 @@
   },
   "categories": ["AI", "Chat", "Programming Languages"],
   "keywords": ["ai", "agent", "deepseek", "harness", "chat", "copilot", "coding assistant"],
-  "activationEvents": ["onView:dsh.chat"],
+  "activationEvents": ["onView:dsh.chat", "onView:dsh.sessions"],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "contributes": {
     "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dsh-sidebar",
+          "title": "DeepSeek Harness",
+          "icon": "media/icon.svg"
+        }
+      ],
       "secondarySidebar": [
         {
           "id": "dsh",
@@ -38,8 +45,21 @@
           "id": "dsh.chat",
           "name": "%view.chat%"
         }
+      ],
+      "dsh-sidebar": [
+        {
+          "type": "tree",
+          "id": "dsh.sessions",
+          "name": "%view.sessions%"
+        }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "dsh.sessions",
+        "contents": "%welcome.sessions%"
+      }
+    ],
     "commands": [
       {
         "command": "dsh.newChat",
@@ -58,6 +78,29 @@
         "title": "%cmd.openPanel%",
         "category": "%category%",
         "icon": "media/icon.svg"
+      },
+      {
+        "command": "dsh.sessions.open",
+        "title": "%cmd.sessions.open%",
+        "category": "%category%"
+      },
+      {
+        "command": "dsh.sessions.rename",
+        "title": "%cmd.sessions.rename%",
+        "category": "%category%",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "dsh.sessions.delete",
+        "title": "%cmd.sessions.delete%",
+        "category": "%category%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "dsh.sessions.refresh",
+        "title": "%cmd.sessions.refresh%",
+        "category": "%category%",
+        "icon": "$(refresh)"
       },
       {
         "command": "dsh.chat.addToChat",
@@ -189,11 +232,36 @@
       "view/title": [
         {
           "command": "dsh.newChat",
+          "when": "view == dsh.chat",
           "group": "navigation@1"
         },
         {
           "command": "dsh.chat.resume",
+          "when": "view == dsh.chat",
           "group": "navigation@2"
+        },
+        {
+          "command": "dsh.sessions.refresh",
+          "when": "view == dsh.sessions",
+          "group": "navigation@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dsh.sessions.rename",
+          "when": "view == dsh.sessions && viewItem == dsh.session",
+          "group": "inline@1"
+        },
+        {
+          "command": "dsh.sessions.delete",
+          "when": "view == dsh.sessions && viewItem == dsh.session",
+          "group": "inline@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "dsh.sessions.open",
+          "when": "false"
         }
       ],
       "editor/context": [
@@ -312,58 +380,75 @@
     ],
     "configuration": [
       {
-        "title": "%category%",
+        "title": "%config.kernel%",
+        "order": 1,
         "properties": {
           "dsh.executablePath": {
             "type": "string",
             "default": "",
+            "order": 1,
             "description": "%setting.executablePath%"
           },
           "dsh.preferredVersion": {
             "type": "string",
             "default": "",
+            "order": 2,
             "description": "%setting.preferredVersion%"
-          },
-          "dsh.acpArgs": {
-            "type": "array",
-            "items": { "type": "string" },
-            "default": ["--profile", "acp"],
-            "description": "%setting.acpArgs%"
-          },
-          "dsh.acpProfile": {
-            "type": "string",
-            "default": "acp",
-            "description": "%setting.acpProfile%"
-          },
-          "dsh.acpPluginPackage": {
-            "type": "string",
-            "default": "@deepseek-ai/dsh-acp-app",
-            "description": "%setting.acpPluginPackage%"
-          },
-          "dsh.model": {
-            "type": "string",
-            "default": "",
-            "description": "%setting.model%"
           },
           "dsh.homeDir": {
             "type": "string",
             "default": "",
+            "order": 3,
             "description": "%setting.homeDir%"
-          },
+          }
+        }
+      },
+      {
+        "title": "%config.behavior%",
+        "order": 2,
+        "properties": {
           "dsh.autoApproveReadOnly": {
             "type": "boolean",
             "default": false,
+            "order": 1,
             "description": "%setting.autoApproveReadOnly%"
           },
           "dsh.attachActiveSelection": {
             "type": "boolean",
             "default": true,
+            "order": 2,
             "description": "%setting.attachActiveSelection%"
           },
           "dsh.autoOpenReview": {
             "type": "boolean",
             "default": true,
+            "order": 3,
             "description": "%setting.autoOpenReview%"
+          }
+        }
+      },
+      {
+        "title": "%config.acp%",
+        "order": 3,
+        "properties": {
+          "dsh.acpArgs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": ["--profile", "acp"],
+            "order": 1,
+            "description": "%setting.acpArgs%"
+          },
+          "dsh.acpProfile": {
+            "type": "string",
+            "default": "acp",
+            "order": 2,
+            "description": "%setting.acpProfile%"
+          },
+          "dsh.acpPluginPackage": {
+            "type": "string",
+            "default": "@deepseek-ai/dsh-acp-app",
+            "order": 3,
+            "description": "%setting.acpPluginPackage%"
           }
         }
       }

@@ -106,6 +106,26 @@ export class DshLocator {
 
   // -------------------------------------------------------------------------
 
+  /**
+   * Environment additions shared by every launch path: the home override, plus
+   * the Electron-as-Node flag when the kernel entry point is run by the VS Code
+   * runtime instead of a system Node.
+   */
+  private launchEnv(runner: 'node' | 'direct'): Record<string, string> {
+    const env: Record<string, string> = {};
+    if (runner === 'node') {
+      env.ELECTRON_RUN_AS_NODE = '1';
+    }
+    const home = this.settings.homeDir;
+    if (home) {
+      // The kernel resolves its home as `process.env.DSH_HOME || <platform
+      // default>`, so this is the supported override. It relocates credentials,
+      // sessions, attachments and the user patch layer together.
+      env.DSH_HOME = home;
+    }
+    return env;
+  }
+
   private async fromSetting(): Promise<DshLaunchSpec | undefined> {
     const p = this.settings.executablePath;
     if (!p) {
@@ -116,7 +136,7 @@ export class DshLocator {
       return {
         command: process.execPath,
         args: [p, ...this.settings.acpArgs],
-        extraEnv: electronNodeEnv(),
+        extraEnv: this.launchEnv('node'),
         shell: false,
         source: 'setting',
       };
@@ -127,7 +147,7 @@ export class DshLocator {
     return {
       command: p,
       args: [...this.settings.acpArgs],
-      extraEnv: {},
+      extraEnv: this.launchEnv('direct'),
       shell: needsShell,
       source: 'setting',
     };
@@ -143,7 +163,7 @@ export class DshLocator {
     return {
       command: process.execPath,
       args: [bin, ...this.settings.acpArgs],
-      extraEnv: electronNodeEnv(),
+      extraEnv: this.launchEnv('node'),
       shell: false,
       source: 'managed',
     };
@@ -155,7 +175,14 @@ export class DshLocator {
     if (version === undefined) {
       return undefined;
     }
-    return { command: 'dsh', args: [...this.settings.acpArgs], extraEnv: {}, shell, source: 'path', version };
+    return {
+      command: 'dsh',
+      args: [...this.settings.acpArgs],
+      extraEnv: this.launchEnv('direct'),
+      shell,
+      source: 'path',
+      version,
+    };
   }
 
   /**
@@ -186,10 +213,6 @@ export class DshLocator {
     const versionArgs = spec.command === process.execPath ? [spec.args[0] ?? '', '--version'] : ['--version'];
     return tryVersion(spec.command, versionArgs, spec.shell, spec.extraEnv);
   }
-}
-
-function electronNodeEnv(): Record<string, string> {
-  return { ELECTRON_RUN_AS_NODE: '1' };
 }
 
 async function assertFile(p: string): Promise<void> {

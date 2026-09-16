@@ -14,6 +14,8 @@ const STORAGE_KEY = 'dsh.sessions';
 const MAX_HISTORY = 50;
 
 export class SessionStore {
+  private readonly listeners = new Set<() => void>();
+
   constructor(private readonly memento: MementoLike) {}
 
   async list(): Promise<SessionMeta[]> {
@@ -31,11 +33,13 @@ export class SessionStore {
     }
     const trimmed = sessions.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_HISTORY);
     await this.memento.update(STORAGE_KEY, trimmed);
+    this.emit();
   }
 
   async remove(sessionId: string): Promise<void> {
     const sessions = (await this.list()).filter((s) => s.sessionId !== sessionId);
     await this.memento.update(STORAGE_KEY, sessions);
+    this.emit();
   }
 
   async rename(sessionId: string, title: string): Promise<void> {
@@ -46,5 +50,18 @@ export class SessionStore {
     }
     target.title = title.trim() || target.title;
     await this.memento.update(STORAGE_KEY, sessions);
+    this.emit();
+  }
+
+  /** Notifies when the history changes, so the sessions view can refresh. */
+  onChange(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private emit(): void {
+    for (const listener of this.listeners) {
+      listener();
+    }
   }
 }

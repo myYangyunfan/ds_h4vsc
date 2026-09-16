@@ -28,12 +28,30 @@ rl.on('line', (line) => {
         result: {
           protocolVersion: 1,
           authMethods: [{ id: 'mock-oauth', name: 'Mock sign-in' }],
-          agentCapabilities: { loadSession: false },
+          // Mirrors the real dsh kernel: `session/resume` is advertised and
+          // `session/load` is not, so a client that conflates the two gets a
+          // method-not-found here exactly as it would in production.
+          agentCapabilities: {
+            mcpCapabilities: { http: true },
+            sessionCapabilities: { close: {}, list: {}, resume: {} },
+          },
         },
       });
       break;
     case 'session/new':
       write({ jsonrpc: '2.0', id: message.id, result: { sessionId: 'mock-session' } });
+      break;
+    case 'session/resume':
+      write({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          modes: {
+            currentModeId: 'agent',
+            availableModes: [{ id: 'agent', name: 'Agent' }],
+          },
+        },
+      });
       break;
     case 'session/prompt': {
       write({ jsonrpc: '2.0', id: message.id, result: { stopReason: 'end_turn' } });
@@ -92,7 +110,11 @@ rl.on('line', (line) => {
       break;
     }
     default:
-      write({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'not implemented' } });
+      write({
+        jsonrpc: '2.0',
+        id: message.id,
+        error: { code: -32601, message: `Method not found: ${message.method}` },
+      });
   }
 });
 

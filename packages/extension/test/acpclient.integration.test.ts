@@ -60,7 +60,8 @@ describe('AcpClient against a real ACP agent process', () => {
   it('completes the initialize handshake', async () => {
     const client = await kernel.ready();
     expect(client.authMethods).toEqual([{ id: 'mock-oauth', name: 'Mock sign-in', description: undefined }]);
-    expect(client.canLoadSession).toBe(false);
+    // Advertised through sessionCapabilities.resume, not the legacy loadSession flag.
+    expect(client.canLoadSession).toBe(true);
   });
 
   it('creates a session', async () => {
@@ -68,6 +69,17 @@ describe('AcpClient against a real ACP agent process', () => {
     const session = await client.newSession(process.cwd());
     expect(session.sessionId).toBe('mock-session');
     expect(session.modes).toEqual([]);
+  });
+
+  it('reopens a session through session/resume', async () => {
+    const client = await kernel.ready();
+    // The mock supports session/resume only. A client that mistakes the resume
+    // capability for session/load support fails here with "Method not found:
+    // session/load", which is the production bug this guards.
+    const session = await client.loadSession(process.cwd(), 'mock-session');
+    expect(session.sessionId).toBe('mock-session');
+    expect(session.modes).toEqual([{ id: 'agent', name: 'Agent' }]);
+    expect(session.modeId).toBe('agent');
   });
 
   it('streams message chunks and maps diff tool calls', async () => {

@@ -55,7 +55,15 @@ function extractModes(result: unknown): { modes: AgentModeInfo[]; modeId?: strin
 export class AcpClient {
   private readonly connection: acp.ClientSideConnection;
   private _authMethods: AcpAuthenticateMethod[] = [];
-  private _canLoadSession = false;
+  /**
+   * Which ACP method can reopen an existing session, or undefined when the
+   * kernel supports neither. `session/resume` and `session/load` are separate
+   * methods behind separate capabilities - the dsh kernel advertises
+   * `sessionCapabilities.resume` (with close/list) and never `session/load`,
+   * so treating one as a proxy for the other asked the kernel for a method it
+   * does not implement ("Method not found: session/load").
+   */
+  private _resumeMethod: 'resume' | 'load' | undefined;
   private _closed = false;
 
   private constructor(
@@ -126,11 +134,21 @@ export class AcpClient {
       name: m.name ?? undefined,
       description: m.description ?? undefined,
     }));
-    // Resume capability moved between schema revisions: honor both shapes.
+    // Prefer `session/resume` when the kernel advertises it: that is the modern
+    // shape and what the dsh kernel implements. `session/load` has no entry in
+    // SessionCapabilities - it survived as the older top-level `loadSession`
+    // flag - so that flag is the only signal for it.
     const caps = init.agentCapabilities as
-      | { loadSession?: boolean; sessionCapabilities?: { resume?: unknown } }
+      | {
+          loadSession?: boolean;
+          sessionCapabilities?: { resume?: unknown };
+        }
       | undefined;
-    client._canLoadSession = Boolean(caps?.loadSession) || Boolean(caps?.sessionCapabilities?.resume);
+    if (caps?.sessionCapabilities?.resume) {
+      client._resumeMethod = 'resume';
+    } else if (caps?.loadSession) {
+      client._resumeMethod = 'load';
+    }
 
     child.on('exit', (code) => {
       client._closed = true;
@@ -144,7 +162,7 @@ export class AcpClient {
   }
 
   get canLoadSession(): boolean {
-    return this._canLoadSession;
+    return this._resumeMethod !== undefined;
   }
 
   get closed(): boolean {
@@ -158,20 +176,20 @@ export class AcpClient {
   }
 
   async loadSession(cwd: string, sessionId: string): Promise<SessionHandle> {
-    if (!this._canLoadSession) {
+    if (!this._resumeMethod) {
       throw new Error('The connected kernel does not support session resumption');
     }
-    const connection = this.connection as unknown as {
-      loadSession?: (params: { cwd: string; sessionId: string; mcpServers: unknown[] }) => Promise<unknown>;
-    };
-    if (typeof connection.loadSession !== 'function') {
-      throw new Error('Kernel ACP build lacks a loadSession method');
+    if (this._resumeMethod === 'resume') {
+      // Resolves with mode/config state only - unlike `session/load`, the
+      // kernel does not replay the conversation, which is why the timeline is
+      // persisted locally in workspaceState.
+      const resumed = await this.connection.resumeSession({ sessionId, cwd, mcpServers: [] });
+      const modes = extractModes(resumed);
+      return { sessionId, ...modes };
     }
-    const result = (await connection.loadSession({ cwd, sessionId, mcpServers: [] })) as {
-      sessionId?: string;
-    };
-    const modes = extractModes(result);
-    return { sessionId: result.sessionId ?? sessionId, ...modes };
+    const loaded = await this.connection.loadSession({ sessionId, cwd, mcpServers: [] });
+    const modes = extractModes(loaded);
+    return { sessionId, ...modes };
   }
 
   async prompt(sessionId: string, blocks: PromptContentBlock[]): Promise<StopReason> {
