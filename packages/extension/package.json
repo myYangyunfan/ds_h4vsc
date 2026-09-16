@@ -2,7 +2,7 @@
   "name": "deepseek-harness",
   "displayName": "DeepSeek Harness",
   "description": "%ext.description%",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "publisher": "dsh-tools",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -18,18 +18,11 @@
   },
   "categories": ["AI", "Chat", "Programming Languages"],
   "keywords": ["ai", "agent", "deepseek", "harness", "chat", "copilot", "coding assistant"],
-  "activationEvents": ["onView:dsh.chat", "onView:dsh.chatSidebar"],
+  "activationEvents": ["onView:dsh.chat"],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "contributes": {
     "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "dsh-sidebar",
-          "title": "DeepSeek Harness",
-          "icon": "media/icon.svg"
-        }
-      ],
       "secondarySidebar": [
         {
           "id": "dsh",
@@ -43,13 +36,6 @@
         {
           "type": "webview",
           "id": "dsh.chat",
-          "name": "%view.chat%"
-        }
-      ],
-      "dsh-sidebar": [
-        {
-          "type": "webview",
-          "id": "dsh.chatSidebar",
           "name": "%view.chat%"
         }
       ]

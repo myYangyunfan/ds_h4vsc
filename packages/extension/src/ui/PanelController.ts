@@ -28,16 +28,14 @@ import type { StatusItem } from '../statusbar/StatusItem.js';
 import type { Logger } from '../util/log.js';
 
 /**
- * The chat panel in the secondary (right) side bar. This is the primary
- * placement, so it keeps the original view id and every command targets it.
+ * The chat panel, contributed to the secondary (right) side bar. VS Code binds
+ * a view container to exactly one location, and a container in the activity bar
+ * always renders in the *primary* side bar, so an icon on the left could never
+ * open this panel on the right. The right side bar is therefore the only home,
+ * reached through the editor title button, the `Ctrl+Alt+D` keybinding or the
+ * command palette.
  */
 export const CHAT_VIEW_ID = 'dsh.chat';
-/**
- * The same chat in the activity bar. Contributing a second container keeps a
- * permanent icon on the left; VS Code cannot place one view in two containers,
- * so this is a distinct view id served by the same provider.
- */
-export const CHAT_SIDEBAR_VIEW_ID = 'dsh.chatSidebar';
 
 export interface PanelDeps {
   extensionVersion: string;
@@ -52,9 +50,9 @@ export interface PanelDeps {
 
 export class PanelController implements vscode.WebviewViewProvider {
   /**
-   * Every live host for this chat - the view in the secondary side bar and the
-   * one in the activity bar. They share one session, so each push and each
-   * inbound message is handled identically for all of them.
+   * Every live host for this chat. There is one today (the right side bar), but
+   * pushes address the set so a second host could be added without revisiting
+   * the messaging path.
    */
   private readonly views = new Set<vscode.WebviewView>();
 

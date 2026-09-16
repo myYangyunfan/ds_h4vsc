@@ -2,6 +2,17 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.8.1 — 修复面板空白与入口
+
+1. **面板永久空白（根因）**：webview 产物里含 `import.meta`（来自对 dev-theme.css 的动态 import），而宿主用普通 `<script>` 加载，属于语法错误，整包解析失败、React 从未挂载。脚本标签改为 `type="module"`，备用主题改静态引入并收拢到 `body.dsh-standalone`（真实 webview 的 body 是 `dsh-root`，不会污染主题）
+2. **多余 CSS 消除**：固定文件名曾让两个 CSS 撞名产出 `index2.css`，现已只有一个
+3. **`dsh.newChat` 报 "An object could not be cloned."**：内建 `<viewId>.focus` 的返回值无法跨 RPC 序列化，新增 `revealChat()` 统一吞掉
+4. **命令 id 冲突**：`dsh.chat.focus` 与 VS Code 为视图自动生成的同名焦点命令撞车，且处理器调用自身（自递归）。删除该声明与注册，改用 `dsh.chat.openPanel`
+5. **面板定位到右侧**：容器贡献到 `secondarySidebar`，与 Copilot / Claude Code 一致；`revealChat()` 先 `focusAuxiliaryBar` 显示右侧栏再聚焦视图，右侧栏收起时也能弹出
+6. **新增编辑器标题栏按钮**：带自有图标的 `dsh.chat.openPanel`，快捷键 `Ctrl+Alt+D`
+7. **新增单色 SVG 图标**：由 logo 位图矢量化（`fill="currentColor"`），对比三个镂空方案后选用"仅眼睛镂空"，24px 下轮廓最清晰
+8. **移除左侧活动栏图标**：VS Code 把容器绑定到唯一位置，活动栏图标只能打开左侧栏，与"面板在右侧"冲突，故不再提供左侧入口
+
 ## 0.8.0 — 20 轮交互打磨
 
 1. **日期分隔符**：今天/昨天/日期，长对话天然分段

@@ -17,7 +17,7 @@ import { ApprovalBridge } from './approval/ApprovalBridge.js';
 import { ContextService } from './editor/ContextService.js';
 import { DiffService } from './editor/DiffService.js';
 import { WorkingSet } from './editor/WorkingSet.js';
-import { CHAT_SIDEBAR_VIEW_ID, CHAT_VIEW_ID, PanelController } from './ui/PanelController.js';
+import { CHAT_VIEW_ID, PanelController } from './ui/PanelController.js';
 import { StatusItem } from './statusbar/StatusItem.js';
 import { DisposableBag } from './util/dispose.js';
 import { Logger } from './util/log.js';
@@ -68,30 +68,36 @@ export function activate(context: vscode.ExtensionContext): void {
     hasApiKey: () => getApiKey(context.secrets).then((key) => Boolean(key)),
   });
 
-  // The chat lives in two containers that share one session: the secondary
-  // (right) side bar and the activity bar. Registering the same provider for
-  // both keeps either entry point usable and in sync.
+  // The chat lives in the secondary (right) side bar. A container contributed
+  // to the activity bar would always render in the primary side bar instead,
+  // so there is deliberately no left-hand entry point.
   bag.push(
     vscode.window.registerWebviewViewProvider(CHAT_VIEW_ID, panel, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
   );
-  bag.push(
-    vscode.window.registerWebviewViewProvider(CHAT_SIDEBAR_VIEW_ID, panel, {
-      webviewOptions: { retainContextWhenHidden: true },
-    }),
-  );
 
   /**
-   * Reveals the chat panel. VS Code auto-registers `<viewId>.focus` for every
-   * contributed view and that command resolves with a view object which cannot
-   * be sent back over the extension host RPC boundary ("An object could not be
-   * cloned."), so its result must never be propagated. Every caller goes
-   * through here for that reason. Note this deliberately does not register a
-   * command named `dsh.chat.focus`: that id already belongs to the generated
-   * view command, and shadowing it made the handler call itself.
+   * Reveals the chat panel in the secondary (right) side bar and focuses it.
+   *
+   * Two steps, each guarded separately:
+   *  1. `focusAuxiliaryBar` shows the secondary side bar when the user has it
+   *     collapsed. Our view lives there and nothing else would bring it back.
+   *  2. `<viewId>.focus` activates our container in case a different one was
+   *     showing. That generated command resolves with a view object which
+   *     cannot cross the extension host RPC boundary ("An object could not be
+   *     cloned."), so its result must never be propagated - hence the catch.
+   *
+   * This deliberately does not register a command named `dsh.chat.focus`: that
+   * id already belongs to the generated view command, and shadowing it made the
+   * handler call itself.
    */
   async function revealChat(): Promise<void> {
+    try {
+      await vscode.commands.executeCommand('workbench.action.focusAuxiliaryBar');
+    } catch (err) {
+      logger.warn(`Could not show the secondary side bar: ${String(err)}`);
+    }
     try {
       await vscode.commands.executeCommand(`${CHAT_VIEW_ID}.focus`);
     } catch (err) {
