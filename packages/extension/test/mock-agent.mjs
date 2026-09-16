@@ -11,6 +11,20 @@ const write = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
 
 let nextId = 0;
 const pendingPermission = new Map();
+/**
+ * Sessions the kernel holds open. Mirrors the real kernel: `session/new` and
+ * `session/resume` activate a session, resuming an active one is rejected, and
+ * only `session/close` frees it again.
+ */
+const activeSessions = new Set();
+let sessionCounter = 0;
+
+const RESUME_MODES = {
+  modes: {
+    currentModeId: 'agent',
+    availableModes: [{ id: 'agent', name: 'Agent' }],
+  },
+};
 
 rl.on('line', (line) => {
   if (!line.trim()) {
@@ -38,21 +52,32 @@ rl.on('line', (line) => {
         },
       });
       break;
-    case 'session/new':
-      write({ jsonrpc: '2.0', id: message.id, result: { sessionId: 'mock-session' } });
+    case 'session/new': {
+      sessionCounter += 1;
+      const sessionId = `mock-session-${sessionCounter}`;
+      activeSessions.add(sessionId);
+      write({ jsonrpc: '2.0', id: message.id, result: { sessionId } });
       break;
-    case 'session/resume':
-      write({
-        jsonrpc: '2.0',
-        id: message.id,
-        result: {
-          modes: {
-            currentModeId: 'agent',
-            availableModes: [{ id: 'agent', name: 'Agent' }],
-          },
-        },
-      });
+    }
+    case 'session/resume': {
+      const { sessionId } = message.params;
+      if (activeSessions.has(sessionId)) {
+        write({
+          jsonrpc: '2.0',
+          id: message.id,
+          error: { code: -32602, message: `Invalid params: session is already active: ${sessionId}` },
+        });
+        break;
+      }
+      activeSessions.add(sessionId);
+      write({ jsonrpc: '2.0', id: message.id, result: RESUME_MODES });
       break;
+    }
+    case 'session/close': {
+      activeSessions.delete(message.params.sessionId);
+      write({ jsonrpc: '2.0', id: message.id, result: {} });
+      break;
+    }
     case 'session/prompt': {
       write({ jsonrpc: '2.0', id: message.id, result: { stopReason: 'end_turn' } });
       // Stream updates right after resolving the prompt (order irrelevant for

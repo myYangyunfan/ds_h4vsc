@@ -2,6 +2,15 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.8.5 — 修复 "session is already active"
+
+1. **根因**：内核的会话在 `session/new` / `session/resume` 后**保持活动**，直到被 `close`；恢复一个还在活动的会话会被拒绝并回 `Invalid params: session is already active`。而 `newChat()` 只清空本地 `sessionId`、从不通知内核，于是内核里那个会话一直挂着，之后再恢复它就必然报错
+2. **实测确认**：新增 `scripts/probe-sessions.mjs`，对真实内核验证——两个会话可并存创建；恢复活动会话报 `already active`；`close` 之后同一个会话**可以重新恢复**（close 不是销毁）
+3. **按内核语义管理状态**：`ChatSessionService` 新增独立于 `sessionId` 的 `activeSessionId`（两者必须分开——`sessionId` 在窗口重载后会从 workspaceState 恢复，而新内核里什么都没活动）。切换会话与新建对话时关闭旧会话；对已是当前会话的恢复请求直接复用，不再打给内核
+4. **"already active" 视为成功**：那本就是我们想要的终态，现在采纳该会话而不是报错
+5. **修掉一个重载后必然踩到的缺陷**：重载窗口后 `restoreTimeline` 会恢复 `sessionId`，但新内核没有该会话，首次发送会被内核拒绝。现在发送前会确保会话在内核中已激活（必要时先恢复）
+6. **测试**：mock agent 改为镜像内核真实的会话激活模型（活动表、close、同样的报错文案），集成测试断言"活动会话不可恢复、close 后可恢复"
+
 ## 0.8.4 — diff 追踪的诊断日志
 
 1. **输出通道记录每次工具调用**：`tool_call` 会写明「已开始追踪变更」或「该工具名不被识别为文件变更」。若 diff 仍不出现，这行日志能直接说明是内核用了本版本未收录的变更工具名，而不必再猜

@@ -64,6 +64,8 @@ export class AcpClient {
    * does not implement ("Method not found: session/load").
    */
   private _resumeMethod: 'resume' | 'load' | undefined;
+  /** Whether the kernel advertises `sessionCapabilities.close`. */
+  private _canCloseSession = false;
   private _closed = false;
 
   private constructor(
@@ -141,7 +143,7 @@ export class AcpClient {
     const caps = init.agentCapabilities as
       | {
           loadSession?: boolean;
-          sessionCapabilities?: { resume?: unknown };
+          sessionCapabilities?: { resume?: unknown; close?: unknown };
         }
       | undefined;
     if (caps?.sessionCapabilities?.resume) {
@@ -149,6 +151,7 @@ export class AcpClient {
     } else if (caps?.loadSession) {
       client._resumeMethod = 'load';
     }
+    client._canCloseSession = Boolean(caps?.sessionCapabilities?.close);
 
     child.on('exit', (code) => {
       client._closed = true;
@@ -163,6 +166,27 @@ export class AcpClient {
 
   get canLoadSession(): boolean {
     return this._resumeMethod !== undefined;
+  }
+
+  /** Whether the kernel accepts `session/close`. */
+  get canCloseSession(): boolean {
+    return this._canCloseSession;
+  }
+
+  /**
+   * Releases a session in the kernel.
+   *
+   * A session becomes active on `session/new` and on `session/resume`, and the
+   * kernel refuses to resume one that is still active ("session is already
+   * active"). Closing is therefore how a session is left before another is
+   * opened, and closing does not destroy it - `session/resume` works again
+   * afterwards.
+   */
+  async closeSession(sessionId: string): Promise<void> {
+    if (!this._canCloseSession) {
+      return;
+    }
+    await this.connection.closeSession({ sessionId });
   }
 
   get closed(): boolean {

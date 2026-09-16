@@ -85,6 +85,17 @@ export class ChatSessionService implements vscode.Disposable {
   private readonly fileChanges = new FileChangeTracker();
   /** Guards the once-per-turn auto-open of the diff review loop. */
   private reviewOpened = false;
+  /**
+   * The session the kernel currently has open, if any.
+   *
+   * The kernel activates a session on `session/new` and on `session/resume`,
+   * and rejects resuming one that is already active ("session is already
+   * active"). Tracking it here is what keeps the extension from asking twice,
+   * and `sessionId` alone cannot tell the two apart: it is also restored from
+   * workspaceState after a window reload, when the fresh kernel has nothing
+   * active at all.
+   */
+  private activeSessionId: string | undefined;
 
   private get settings(): DshSettings {
     return this.settingsRef;
@@ -126,6 +137,9 @@ export class ChatSessionService implements vscode.Disposable {
       this.status = 'disconnected';
       this.statusDetail = err.message;
       this.sessionId = undefined;
+      // The kernel process is gone, so nothing is active in it any more; a
+      // replacement process starts with an empty session table.
+      this.activeSessionId = undefined;
       this.handlers = undefined;
       this.reducer.addError(l10n.t('内核已退出：{0}', err.message));
       this.flushSnapshot();
@@ -230,6 +244,7 @@ export class ChatSessionService implements vscode.Disposable {
       if (!this.sessionId) {
         const handle = await this.backend.newSession(this.workspaceRoot(), handlers);
         this.sessionId = handle.sessionId;
+        this.activeSessionId = handle.sessionId;
         this.modes = handle.modes;
         this.modeId = handle.modeId;
         const defaultTitle = trimmed.slice(0, 60);
@@ -237,6 +252,9 @@ export class ChatSessionService implements vscode.Disposable {
         await this.reloadHistory();
         // R9: replace the truncated-default title with an AI-generated one.
         void this.autoTitle(handle.sessionId, defaultTitle);
+      } else {
+        // A session restored from workspaceState is not open in a fresh kernel.
+        await this.ensureSessionActive(handlers);
       }
 
       this.reducer.addUserMessage(trimmed, merged);
@@ -306,6 +324,9 @@ export class ChatSessionService implements vscode.Disposable {
   }
 
   async newChat(): Promise<void> {
+    // Leave the session in the kernel before starting a new one: it stays
+    // active until closed, and an active session cannot be resumed later.
+    await this.releaseActiveSession();
     this.sessionId = undefined;
     this.modes = [];
     this.modeId = undefined;
@@ -319,20 +340,85 @@ export class ChatSessionService implements vscode.Disposable {
   }
 
   async loadSession(sessionId: string): Promise<void> {
+    // Already the session the kernel has open: resuming it again is rejected,
+    // and the panel is showing it anyway.
+    if (sessionId === this.activeSessionId) {
+      this.sessionId = sessionId;
+      this.setStatus('idle');
+      this.scheduleSnapshot();
+      return;
+    }
     try {
       this.setStatus('connecting');
       this.reducer.reset();
       this.workingSet.clear();
       const handlers = await this.ensureKernel();
+      // Free the current one first: the kernel holds a session active until it
+      // is closed, and closing is not destructive - the session can be resumed
+      // again later.
+      await this.releaseActiveSession();
       const handle = await this.backend.loadSession(this.workspaceRoot(), sessionId, handlers);
       this.sessionId = handle.sessionId;
+      this.activeSessionId = handle.sessionId;
       this.modes = handle.modes;
       this.modeId = handle.modeId;
       this.setStatus('idle');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      if (isAlreadyActive(message)) {
+        // The kernel is telling us the session is open, which is exactly the
+        // state we wanted. Adopt it instead of reporting a failure.
+        this.sessionId = sessionId;
+        this.activeSessionId = sessionId;
+        this.setStatus('idle');
+        return;
+      }
       this.reducer.addError(message);
       this.setStatus('error', message);
+    }
+  }
+
+  /**
+   * Makes sure the kernel has `sessionId` open before it is used.
+   *
+   * Needed after a window reload: the timeline - and with it the session id -
+   * is restored from workspaceState, but the kernel process is new and has
+   * nothing active, so the first prompt in a restored chat would otherwise
+   * address a session it does not know.
+   */
+  private async ensureSessionActive(handlers: KernelHandlers): Promise<void> {
+    const target = this.sessionId;
+    if (!target || this.activeSessionId === target) {
+      return;
+    }
+    await this.releaseActiveSession();
+    try {
+      const handle = await this.backend.loadSession(this.workspaceRoot(), target, handlers);
+      this.activeSessionId = handle.sessionId;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (isAlreadyActive(message)) {
+        this.activeSessionId = target;
+        return;
+      }
+      throw err;
+    }
+  }
+
+  /** Closes the kernel's active session, if it has one. Best-effort. */
+  private async releaseActiveSession(): Promise<void> {
+    const current = this.activeSessionId;
+    if (!current) {
+      return;
+    }
+    this.activeSessionId = undefined;
+    try {
+      const handlers = await this.ensureKernel();
+      await this.backend.closeSession(current, handlers);
+    } catch (err) {
+      // Losing the close only costs the ability to resume that session again in
+      // this kernel process; it must never fail the user's action.
+      this.logger.warn(`Could not close session ${current}: ${String(err)}`);
     }
   }
 
@@ -691,4 +777,13 @@ export class ChatSessionService implements vscode.Disposable {
     }
     return folders[0]!.uri.fsPath;
   }
+}
+
+/**
+ * The kernel rejects resuming a session it already holds open. That is the
+ * desired end state rather than a failure, so callers adopt the session instead
+ * of reporting an error.
+ */
+function isAlreadyActive(message: string): boolean {
+  return /already active/i.test(message);
 }

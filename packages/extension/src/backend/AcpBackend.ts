@@ -80,6 +80,18 @@ export class AcpBackend {
     return client.loadSession(cwd, sessionId);
   }
 
+  /**
+   * Releases the session in the kernel.
+   *
+   * A session stays active from `session/new` or `session/resume` until it is
+   * closed, and the kernel refuses to resume an active one. Callers close the
+   * session they are leaving so the next one can be opened.
+   */
+  async closeSession(sessionId: string, handlers: KernelHandlers): Promise<void> {
+    const client = await this.ensureConnected(handlers);
+    await client.closeSession(sessionId);
+  }
+
   async prompt(
     sessionId: string,
     blocks: PromptContentBlock[],

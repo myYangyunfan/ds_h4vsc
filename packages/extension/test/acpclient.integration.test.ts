@@ -47,9 +47,12 @@ class MockKernel {
 
 describe('AcpClient against a real ACP agent process', () => {
   let kernel: MockKernel;
+  let sessionId: string;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     kernel = new MockKernel();
+    const client = await kernel.ready();
+    sessionId = (await client.newSession(process.cwd())).sessionId;
   });
 
   afterAll(async () => {
@@ -60,31 +63,37 @@ describe('AcpClient against a real ACP agent process', () => {
   it('completes the initialize handshake', async () => {
     const client = await kernel.ready();
     expect(client.authMethods).toEqual([{ id: 'mock-oauth', name: 'Mock sign-in', description: undefined }]);
-    // Advertised through sessionCapabilities.resume, not the legacy loadSession flag.
+    // Advertised through sessionCapabilities, not the legacy loadSession flag.
     expect(client.canLoadSession).toBe(true);
+    expect(client.canCloseSession).toBe(true);
   });
 
   it('creates a session', async () => {
     const client = await kernel.ready();
     const session = await client.newSession(process.cwd());
-    expect(session.sessionId).toBe('mock-session');
+    expect(session.sessionId).toBeTruthy();
     expect(session.modes).toEqual([]);
   });
 
   it('reopens a session through session/resume', async () => {
     const client = await kernel.ready();
-    // The mock supports session/resume only. A client that mistakes the resume
-    // capability for session/load support fails here with "Method not found:
-    // session/load", which is the production bug this guards.
-    const session = await client.loadSession(process.cwd(), 'mock-session');
-    expect(session.sessionId).toBe('mock-session');
-    expect(session.modes).toEqual([{ id: 'agent', name: 'Agent' }]);
-    expect(session.modeId).toBe('agent');
+    const fresh = (await client.newSession(process.cwd())).sessionId;
+
+    // `session/new` leaves the session open, and the kernel refuses to resume
+    // an open one - the "session is already active" rejection seen in
+    // production. Closing it first is what makes the resume succeed.
+    await expect(client.loadSession(process.cwd(), fresh)).rejects.toThrow(/already active/);
+
+    await client.closeSession(fresh);
+    const resumed = await client.loadSession(process.cwd(), fresh);
+    expect(resumed.sessionId).toBe(fresh);
+    expect(resumed.modes).toEqual([{ id: 'agent', name: 'Agent' }]);
+    expect(resumed.modeId).toBe('agent');
   });
 
   it('streams message chunks and maps diff tool calls', async () => {
     const client = await kernel.ready();
-    const stop: StopReason = await client.prompt('mock-session', [{ type: 'text', text: 'hi' }]);
+    const stop: StopReason = await client.prompt(sessionId, [{ type: 'text', text: 'hi' }]);
     // Let the interleaved notifications drain.
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(stop).toBe('end_turn');
@@ -107,7 +116,7 @@ describe('AcpClient against a real ACP agent process', () => {
 
   it('round-trips a permission request', async () => {
     const client = await kernel.ready();
-    await client.prompt('mock-session', [{ type: 'text', text: 'again' }]);
+    await client.prompt(sessionId, [{ type: 'text', text: 'again' }]);
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(kernel.permissionRequest).toBeDefined();
