@@ -2,6 +2,14 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.8.3 — 共享凭据、diff 推导与选中加入对话
+
+1. **不再误报"尚未设置 API Key"**：内核自己解析凭据，优先级为「继承的环境变量 `DEEPSEEK_API_KEY` > `$DSH_HOME/.credentials.yaml` > `<工作区>/.env` > `$DSH_HOME/.env`」。你的桌面端就是通过那份 `.credentials.yaml` 登录的，而扩展只看 VS Code SecretStorage，所以内核明明已登录它还在提醒。新增 `hasKernelCredential` 按内核的顺序逐层探测
+2. **API Key 真正传给内核**：此前 `getApiKey` 只用于探测横幅和日志——存进 SecretStorage 的 Key 从未到达内核。现以内核文档明确支持、且优先级最高的 `DEEPSEEK_API_KEY` 环境变量传入；未设置时不传任何变量，从而让共享凭据生效（环境变量优先级更高，多传会盖掉共享的那份）
+3. **修复 diff 完全不出**：内核的 ACP 桥从不构造 diff 内容（其实现里 `oldText`/`newText`/`diff` 出现 0 次，`kind` 还被硬编码成 `"other"`），所以扩展那套等 `content[].type === 'diff'` 的机制永远等不到触发。新增 `FileChangeTracker` 从内核自己的变更调用推导：`tool_call` 事件带工具名（`title`）和参数（`rawInput`），据此在工具执行前读取目标文件、结束时再读一次，得到精确的前后内容并注册为可审查的编辑。工具词表（`write`/`edit`/`str_replace_editor`）照搬内核自家客户端的实现
+4. **消除一个会静默丢 diff 的竞态**：捕获"修改前"内容原本是异步读，可能晚于工具写文件，那样前后内容相同、diff 被丢弃。改为同步读取（小文本文件，代价可忽略）；单测覆盖了这一点
+5. **选中代码加入对话**：`Ctrl+Alt+A`。顺带修掉一个真 bug——原命令调用 `fromActiveEditor(false)`，即**永远附加整个文件、从不附加选中内容**。现在优先附加选中范围，无选中时回退整个文件，并弹出通知说明加入了什么（`已加入对话：src/app.ts 第 12-30 行`）
+
 ## 0.8.2 — 会话列表、设置区与 ACP 方法修正
 
 1. **修复 `Method not found: session/load`**：内核声明的是 `sessionCapabilities.resume`，对应 `session/resume`，扩展却把它当成 `session/load` 可用的依据。两者是不同方法，`session/load` 在 `SessionCapabilities` 里根本没有对应字段。现在按内核实际声明选择方法，恢复会话不再报错

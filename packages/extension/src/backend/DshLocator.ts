@@ -14,6 +14,7 @@ import * as cp from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { DshSettings } from '../config/Settings.js';
+import { DEEPSEEK_KEY_ENV } from '../config/kernelCredentials.js';
 import type { Logger } from '../util/log.js';
 
 export type DshSource = 'setting' | 'managed' | 'path';
@@ -48,6 +49,9 @@ export class DshLocator {
 
   private settingsRef: DshSettings;
 
+  /** SecretStorage key to hand the kernel, when the user stored one. */
+  private apiKey: string | undefined;
+
   private get settings(): DshSettings {
     return this.settingsRef;
   }
@@ -55,6 +59,16 @@ export class DshLocator {
   /** Applies changed settings without a reload (R8). */
   updateSettings(settings: DshSettings): void {
     this.settingsRef = settings;
+  }
+
+  /**
+   * Supplies (or clears) the key read from SecretStorage. It is exported to the
+   * kernel as `DEEPSEEK_API_KEY`, which its credential chain ranks above the
+   * managed store - an explicit key for this run wins. Leaving it unset is what
+   * lets a `dsh` CLI or desktop install authenticate the kernel instead.
+   */
+  setApiKey(key: string | undefined): void {
+    this.apiKey = key?.trim() ? key.trim() : undefined;
   }
 
   /** Directory that holds the managed kernel install. */
@@ -122,6 +136,9 @@ export class DshLocator {
       // default>`, so this is the supported override. It relocates credentials,
       // sessions, attachments and the user patch layer together.
       env.DSH_HOME = home;
+    }
+    if (this.apiKey) {
+      env[DEEPSEEK_KEY_ENV] = this.apiKey;
     }
     return env;
   }

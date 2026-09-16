@@ -5,7 +5,7 @@
   "cmd.newChat": "新对话",
   "cmd.resume": "恢复会话",
   "cmd.openPanel": "打开右侧对话面板",
-  "cmd.addToChat": "将文件加入 DeepSeek Harness 对话",
+  "cmd.addToChat": "将选中代码加入对话（无选中时加入整个文件）",
   "cmd.explainSelection": "用 DeepSeek Harness 解释所选代码",
   "cmd.reviewChanges": "逐个审查变更",
   "cmd.inlineEdit": "行内指令编辑选中代码",

@@ -2,7 +2,7 @@
   "name": "deepseek-harness",
   "displayName": "DeepSeek Harness",
   "description": "%ext.description%",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "publisher": "dsh-tools",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -334,6 +334,11 @@
         "command": "dsh.chat.inlineEdit",
         "key": "ctrl+alt+k",
         "mac": "cmd+alt+k"
+      },
+      {
+        "command": "dsh.chat.addToChat",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a"
       },
       {
         "command": "dsh.chat.explainSelection",

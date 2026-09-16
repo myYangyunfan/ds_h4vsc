@@ -74,5 +74,10 @@
   "新对话": "New Chat",
   "创建": "Create",
   "打开设置": "Open Settings",
-  "逐个审查变更": "Review Changes One by One"
+  "逐个审查变更": "Review Changes One by One",
+  "DeepSeek Harness：内核已通过自身凭据库登录，无需在此设置 API Key。": "DeepSeek Harness: the kernel is already signed in through its own credential store - no API key is needed here.",
+  "DeepSeek Harness：SecretStorage 中已存有 API Key（内核凭据库中也有）。": "DeepSeek Harness: an API key is stored in SecretStorage (the kernel credential store has one too).",
+  "已加入对话：{0}": "Added to chat: {0}",
+  "第 {0} 行": "line {0}",
+  "第 {0}-{1} 行": "lines {0}-{1}"
 }

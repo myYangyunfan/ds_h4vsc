@@ -9,6 +9,7 @@ import { l10n } from 'vscode';
 import * as vscode from 'vscode';
 import type { ContextAttachment } from '@dsh-vscode/core';
 import { readSettings, getApiKey, setApiKey, API_KEY_SECRET } from './config/Settings.js';
+import { hasKernelCredential, resolveKernelHome } from './config/kernelCredentials.js';
 import { AcpBackend } from './backend/AcpBackend.js';
 import { DshLocator } from './backend/DshLocator.js';
 import { ChatSessionService } from './chat/ChatSessionService.js';
@@ -32,6 +33,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const settings = readSettings();
   const locator = new DshLocator(context.globalStorageUri.fsPath, settings, logger);
+  // A key stored in SecretStorage is handed to the kernel explicitly; with none,
+  // the kernel authenticates from its own shared credential store.
+  const syncApiKey = async (): Promise<void> => {
+    locator.setApiKey(await getApiKey(context.secrets));
+  };
+  void syncApiKey();
   const backend = new AcpBackend(locator, logger);
   const workingSet = new WorkingSet();
   const diff = new DiffService(workingSet, logger);
@@ -59,6 +66,15 @@ export function activate(context: vscode.ExtensionContext): void {
   void service.restoreTimeline();
 
   const extensionVersion = readExtensionVersion(context);
+  // The panel only needs to prompt when *no* layer has a key: not SecretStorage,
+  // and not the kernel's own store, which a dsh CLI or the desktop app fills.
+  const kernelIsSignedIn = async (): Promise<boolean> => {
+    if (await getApiKey(context.secrets)) {
+      return true;
+    }
+    const home = resolveKernelHome(readSettings().homeDir);
+    return hasKernelCredential(home, vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+  };
   const panel = new PanelController(context.extensionUri, {
     extensionVersion,
     service,
@@ -66,7 +82,7 @@ export function activate(context: vscode.ExtensionContext): void {
     diff,
     status,
     logger,
-    hasApiKey: () => getApiKey(context.secrets).then((key) => Boolean(key)),
+    hasApiKey: kernelIsSignedIn,
   });
 
   // The chat lives in the secondary (right) side bar. A container contributed
@@ -167,13 +183,18 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }));
   bag.push(vscode.commands.registerCommand('dsh.chat.addToChat', async () => {
-    const attachment = contexts.fromActiveEditor(false);
+    // Prefer the selection: adding "this bit of code" is the common case, and
+    // fromActiveEditor falls back to the whole file when nothing is selected.
+    const attachment = contexts.fromActiveEditor(true);
     if (!attachment) {
       void vscode.window.showInformationMessage(l10n.t('打开一个文件即可将其加入对话。'));
       return;
     }
     await revealChat();
     panel.addContext(attachment);
+    void vscode.window.showInformationMessage(
+      l10n.t('已加入对话：{0}', describeAttachment(attachment)),
+    );
   }));
   // Shared flow for selection-driven prompts (commands + code actions).
   async function runWithSelection(prompt: string): Promise<void> {
@@ -516,18 +537,30 @@ export function activate(context: vscode.ExtensionContext): void {
     });
     if (value) {
       await setApiKey(context.secrets, value);
+      await syncApiKey();
       void vscode.window.showInformationMessage(l10n.t('DeepSeek Harness：API Key 已保存。'));
     }
   }));
   bag.push(vscode.commands.registerCommand('dsh.clearApiKey', async () => {
     await context.secrets.delete(API_KEY_SECRET);
+    await syncApiKey();
     void vscode.window.showInformationMessage(l10n.t('DeepSeek Harness：API Key 已清除。'));
   }));
   bag.push(vscode.commands.registerCommand('dsh.showApiKeyStatus', async () => {
-    const hasKey = Boolean(await getApiKey(context.secrets));
+    const stored = Boolean(await getApiKey(context.secrets));
+    const home = resolveKernelHome(readSettings().homeDir);
+    const shared = await hasKernelCredential(home, vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+    if (stored) {
+      void vscode.window.showInformationMessage(
+        shared
+          ? l10n.t('DeepSeek Harness：SecretStorage 中已存有 API Key（内核凭据库中也有）。')
+          : l10n.t('DeepSeek Harness：SecretStorage 中已存有 API Key。'),
+      );
+      return;
+    }
     void vscode.window.showInformationMessage(
-      hasKey
-        ? l10n.t('DeepSeek Harness：SecretStorage 中已存有 API Key。')
+      shared
+        ? l10n.t('DeepSeek Harness：内核已通过自身凭据库登录，无需在此设置 API Key。')
         : l10n.t('DeepSeek Harness：尚未存储 API Key。'),
     );
   }));
@@ -639,6 +672,19 @@ export function activate(context: vscode.ExtensionContext): void {
 function readExtensionVersion(context: vscode.ExtensionContext): string {
   const pkg = context.extension?.packageJSON as { version?: string } | undefined;
   return pkg?.version ?? '0.0.0';
+}
+
+/** Names a context chip in a notification: the file, plus the selected lines. */
+function describeAttachment(attachment: ContextAttachment): string {
+  const { range } = attachment;
+  if (!range) {
+    return attachment.path;
+  }
+  const span =
+    range.startLine === range.endLine
+      ? l10n.t('第 {0} 行', range.startLine)
+      : l10n.t('第 {0}-{1} 行', range.startLine, range.endLine);
+  return `${attachment.path} ${span}`;
 }
 
 /** Runs git in the workspace root and returns stdout (empty on failure). */

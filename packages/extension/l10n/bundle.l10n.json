@@ -74,5 +74,10 @@
   "新对话": "新对话",
   "创建": "创建",
   "打开设置": "打开设置",
-  "逐个审查变更": "逐个审查变更"
+  "逐个审查变更": "逐个审查变更",
+  "DeepSeek Harness：内核已通过自身凭据库登录，无需在此设置 API Key。": "DeepSeek Harness：内核已通过自身凭据库登录，无需在此设置 API Key。",
+  "DeepSeek Harness：SecretStorage 中已存有 API Key（内核凭据库中也有）。": "DeepSeek Harness：SecretStorage 中已存有 API Key（内核凭据库中也有）。",
+  "已加入对话：{0}": "已加入对话：{0}",
+  "第 {0} 行": "第 {0} 行",
+  "第 {0}-{1} 行": "第 {0}-{1} 行"
 }

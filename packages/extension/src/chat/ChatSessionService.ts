@@ -31,6 +31,7 @@ import {
 import { buildSnapshot } from './EventMapper.js';
 import type { AcpBackend } from '../backend/AcpBackend.js';
 import type { WorkingSet } from '../editor/WorkingSet.js';
+import { FileChangeTracker, type DerivedEdit } from '../editor/FileChangeTracker.js';
 import type { ContextService } from '../editor/ContextService.js';
 import type { DiffService } from '../editor/DiffService.js';
 import type { ApprovalBridge } from '../approval/ApprovalBridge.js';
@@ -80,6 +81,10 @@ export class ChatSessionService implements vscode.Disposable {
   private settingsRef: DshSettings;
   private memento: MementoLike | undefined;
   private panelSink: ((message: ToWebview) => void) | undefined = undefined;
+  /** Derives reviewable edits from the kernel's mutation calls. */
+  private readonly fileChanges = new FileChangeTracker();
+  /** Guards the once-per-turn auto-open of the diff review loop. */
+  private reviewOpened = false;
 
   private get settings(): DshSettings {
     return this.settingsRef;
@@ -236,16 +241,17 @@ export class ChatSessionService implements vscode.Disposable {
 
       this.reducer.addUserMessage(trimmed, merged);
       this.setStatus('prompting');
+      this.reviewOpened = false;
 
       const blocks = this.buildPromptBlocks(trimmed, merged);
       const stop = await this.backend.prompt(this.sessionId, blocks, handlers);
       this.logger.info(`Prompt finished: ${stop}`);
       this.setStatus('idle');
-      // Copilot agent-mode nicety: jump straight into the review loop when
-      // the turn produced pending edits.
-      if (this.settings.autoOpenReview && this.workingSet.pendingCount() > 0) {
-        void this.diffService.openNextPending();
-      }
+      // Copilot agent-mode nicety: jump straight into the review loop when the
+      // turn produced pending edits. Wait for the file reads that derive them
+      // from the kernel's mutation calls, which settle just after the last tool.
+      await this.fileChanges.drain();
+      this.maybeAutoOpenReview();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error('Prompt failed', err instanceof Error ? err : undefined);
@@ -414,6 +420,7 @@ export class ChatSessionService implements vscode.Disposable {
       }
       return;
     }
+    this.observeMutations(update);
     const effects: TimelineEffect[] = this.reducer.apply(update);
     for (const effect of effects) {
       if (effect.type === 'editProposed') {
@@ -431,6 +438,79 @@ export class ChatSessionService implements vscode.Disposable {
       this.modeId = update.currentModeId;
     }
     this.scheduleSnapshot();
+  }
+
+  /**
+   * Turns the kernel's mutation calls into reviewable edits.
+   *
+   * The kernel sends no `diff` tool-call content, so nothing else would ever
+   * populate the changes list. Its `tool_call` event names the tool and carries
+   * the model's arguments, so the file can be read before the tool runs and
+   * again when it settles. See FileChangeTracker for the tool vocabulary.
+   */
+  private observeMutations(update: AcpSessionUpdate): void {
+    if (update.sessionUpdate === 'tool_call') {
+      if (update.status !== 'pending' && update.status !== 'in_progress') {
+        return;
+      }
+      this.fileChanges.begin(
+        update.toolCallId,
+        update.title,
+        update.rawInput,
+        this.workspaceRoot(),
+      );
+      return;
+    }
+    if (update.sessionUpdate !== 'tool_call_update') {
+      return;
+    }
+    const { status } = update;
+    if (status !== 'completed' && status !== 'failed') {
+      return;
+    }
+    void this.fileChanges.settle(update.toolCallId, status === 'completed').then((edit) => {
+      if (edit) {
+        this.registerDerivedEdit(update.toolCallId, edit);
+      }
+    });
+  }
+
+  /** Registers a derived change, respecting any decision already made. */
+  private registerDerivedEdit(toolCallId: string, edit: DerivedEdit): void {
+    const editId = `edit-${toolCallId}`;
+    const existing = this.workingSet.get(editId);
+    if (existing && existing.state !== 'pending') {
+      return;
+    }
+    this.workingSet.registerEdit({
+      editId,
+      path: edit.path,
+      oldText: edit.oldText,
+      newText: edit.newText,
+      // The kernel wrote the file itself, so the change is already on disk and
+      // Reject means "revert to oldText".
+      applied: true,
+      origin: 'toolDiff',
+      state: 'pending',
+    });
+    this.scheduleSnapshot();
+    // A change derived from the last tool call can land just after the turn
+    // ended, so the turn-end hook may already have run.
+    if (this.status === 'idle') {
+      this.maybeAutoOpenReview();
+    }
+  }
+
+  /** Jumps into the review loop when a finished turn left pending edits. */
+  private maybeAutoOpenReview(): void {
+    if (!this.settings.autoOpenReview || this.reviewOpened) {
+      return;
+    }
+    if (this.workingSet.pendingCount() === 0) {
+      return;
+    }
+    this.reviewOpened = true;
+    void this.diffService.openNextPending();
   }
 
   /** Generates a concise session title on an ephemeral session (R9). */
