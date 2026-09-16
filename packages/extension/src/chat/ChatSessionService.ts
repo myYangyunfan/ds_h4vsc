@@ -453,11 +453,19 @@ export class ChatSessionService implements vscode.Disposable {
       if (update.status !== 'pending' && update.status !== 'in_progress') {
         return;
       }
-      this.fileChanges.begin(
+      // Logged so a kernel that mutates files through a tool this build does not
+      // recognise is diagnosable from the output channel, instead of silently
+      // producing no diff at all.
+      const tracked = this.fileChanges.begin(
         update.toolCallId,
         update.title,
         update.rawInput,
         this.workspaceRoot(),
+      );
+      this.logger.debug(
+        tracked
+          ? `Tracking mutation tool call "${update.title ?? ''}"`
+          : `Tool call "${update.title ?? ''}" is not a recognised file mutation`,
       );
       return;
     }
@@ -470,6 +478,7 @@ export class ChatSessionService implements vscode.Disposable {
     }
     void this.fileChanges.settle(update.toolCallId, status === 'completed').then((edit) => {
       if (edit) {
+        this.logger.info(`Derived edit from tool call ${update.toolCallId}: ${edit.path}`);
         this.registerDerivedEdit(update.toolCallId, edit);
       }
     });

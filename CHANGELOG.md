@@ -2,6 +2,11 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.8.4 — diff 追踪的诊断日志
+
+1. **输出通道记录每次工具调用**：`tool_call` 会写明「已开始追踪变更」或「该工具名不被识别为文件变更」。若 diff 仍不出现，这行日志能直接说明是内核用了本版本未收录的变更工具名，而不必再猜
+2. **推导出编辑时记录路径**：便于确认文件确实被追踪到
+
 ## 0.8.3 — 共享凭据、diff 推导与选中加入对话
 
 1. **不再误报"尚未设置 API Key"**：内核自己解析凭据，优先级为「继承的环境变量 `DEEPSEEK_API_KEY` > `$DSH_HOME/.credentials.yaml` > `<工作区>/.env` > `$DSH_HOME/.env`」。你的桌面端就是通过那份 `.credentials.yaml` 登录的，而扩展只看 VS Code SecretStorage，所以内核明明已登录它还在提醒。新增 `hasKernelCredential` 按内核的顺序逐层探测
