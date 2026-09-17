@@ -25,7 +25,6 @@ import {
   type SessionStatus,
   type SlashCommandInfo,
   type TimelineEffect,
-  type TimelineEntry,
   type ToWebview,
 } from '@dsh-vscode/core';
 import { buildSnapshot } from './EventMapper.js';
@@ -36,6 +35,7 @@ import type { ContextService } from '../editor/ContextService.js';
 import type { DiffService } from '../editor/DiffService.js';
 import type { ApprovalBridge } from '../approval/ApprovalBridge.js';
 import type { SessionStore, MementoLike } from './SessionStore.js';
+import { TimelineStore } from './TimelineStore.js';
 import type { DshSettings } from '../config/Settings.js';
 import type { Logger } from '../util/log.js';
 
@@ -90,7 +90,7 @@ export class ChatSessionService implements vscode.Disposable {
   private autoReconnecting = false;
   private reconnectTimer: NodeJS.Timeout | undefined;
   private settingsRef: DshSettings;
-  private memento: MementoLike | undefined;
+  private timelines: TimelineStore | undefined;
   private panelSink: ((message: ToWebview) => void) | undefined = undefined;
   /** Derives reviewable edits from the kernel's mutation calls. */
   private readonly fileChanges = new FileChangeTracker();
@@ -179,7 +179,7 @@ export class ChatSessionService implements vscode.Disposable {
 
   /** Wires workspaceState-backed timeline persistence. */
   setMemento(memento: MementoLike): void {
-    this.memento = memento;
+    this.timelines = new TimelineStore(memento);
   }
 
   /** Installed by the PanelController; the only webview coupling point. */
@@ -194,42 +194,55 @@ export class ChatSessionService implements vscode.Disposable {
   }
 
   /**
-   * Persists the current timeline so it survives a window reload. Debounced
-   * via the snapshot coalescer to avoid thrashing workspaceState on every
-   * streaming chunk.
+   * Persists the current transcript so it survives a window reload and can be
+   * reopened later. See TimelineStore for why this is keyed by session.
    */
   async persistTimeline(): Promise<void> {
-    if (!this.memento) {
+    if (!this.timelines || !this.sessionId) {
       return;
     }
-    const payload = {
-      sessionId: this.sessionId,
-      entries: this.reducer.entries,
-      workingSet: this.workingSet.list(),
-    };
-    await this.memento.update('dsh.timeline', payload);
+    await this.timelines.save(this.sessionId, this.reducer.entries, this.workingSet.list());
   }
 
-  /** Restores a persisted timeline (called once on activation). */
+  /** Restores the most recently used conversation (called once on activation). */
   async restoreTimeline(): Promise<void> {
-    if (!this.memento) {
+    const latest = this.timelines?.latest();
+    if (!latest) {
       return;
     }
-    const persisted = this.memento.get<{
-      sessionId?: string;
-      entries: TimelineEntry[];
-      workingSet: EditInfo[];
-    }>('dsh.timeline');
-    if (!persisted || !Array.isArray(persisted.entries) || persisted.entries.length === 0) {
-      return;
-    }
-    this.sessionId = persisted.sessionId;
-    this.reducer.restore(persisted.entries);
-    for (const edit of persisted.workingSet ?? []) {
+    this.sessionId = latest.sessionId;
+    this.reducer.restore(latest.timeline.entries);
+    for (const edit of latest.timeline.workingSet) {
       this.workingSet.registerEdit(edit);
     }
     this.setStatus('disconnected');
-    this.logger.info(`Restored timeline: ${persisted.entries.length} entries`);
+    this.logger.info(
+      `Restored timeline for ${latest.sessionId}: ${latest.timeline.entries.length} entries`,
+    );
+  }
+
+  /**
+   * Loads a stored transcript into the panel.
+   *
+   * The kernel resumes a session without replaying its messages, so a stored
+   * transcript is the only way an older conversation can actually be read.
+   * Returns false when nothing was kept for it.
+   */
+  private restoreSessionTimeline(sessionId: string): boolean {
+    const stored = this.timelines?.load(sessionId);
+    if (!stored) {
+      return false;
+    }
+    this.reducer.restore(stored.entries);
+    for (const edit of stored.workingSet) {
+      this.workingSet.registerEdit(edit);
+    }
+    return true;
+  }
+
+  /** Drops the stored transcript of a session the user deleted. */
+  async forgetTimeline(sessionId: string): Promise<void> {
+    await this.timelines?.forget(sessionId);
   }
 
   // -------------------------------------------------------------------------
@@ -341,16 +354,17 @@ export class ChatSessionService implements vscode.Disposable {
   async newChat(): Promise<void> {
     // Leave the session in the kernel before starting a new one: it stays
     // active until closed, and an active session cannot be resumed later.
+    // Keep the conversation before leaving it: it stays reopenable from the
+    // sessions list, and the kernel will not replay it for us.
+    await this.persistTimeline();
     await this.releaseActiveSession();
     this.sessionId = undefined;
+    this.activeSessionId = undefined;
     this.modes = [];
     this.modeId = undefined;
     this.kernelCommands = [];
     this.reducer.reset();
     this.workingSet.clear();
-    if (this.memento) {
-      await this.memento.update('dsh.timeline', undefined);
-    }
     this.setStatus('idle');
   }
 
@@ -377,6 +391,21 @@ export class ChatSessionService implements vscode.Disposable {
       this.activeSessionId = handle.sessionId;
       this.modes = handle.modes;
       this.modeId = handle.modeId;
+      // The kernel resumes the session but does not replay its messages, so the
+      // transcript comes from what was stored while it was live.
+      const restored = this.restoreSessionTimeline(handle.sessionId);
+      this.logger.info(
+        restored
+          ? `Opened session ${handle.sessionId} with a stored transcript`
+          : `Opened session ${handle.sessionId} with no stored transcript`,
+      );
+      if (!restored) {
+        // Say so rather than presenting an empty panel: the session is open and
+        // usable, it just has no text to show.
+        void vscode.window.showInformationMessage(
+          l10n.t('此会话没有保存的对话内容，面板会是空的；从此版本起新对话都会保留，可从左侧会话列表重新打开。'),
+        );
+      }
       this.setStatus('idle');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -747,7 +776,7 @@ export class ChatSessionService implements vscode.Disposable {
 
   /** Writes the timeline to workspaceState at most once per persist window. */
   private schedulePersist(): void {
-    if (!this.memento || this.persistTimer) {
+    if (!this.timelines || this.persistTimer) {
       return;
     }
     this.persistTimer = setTimeout(() => {

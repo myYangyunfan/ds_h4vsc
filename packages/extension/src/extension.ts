@@ -136,6 +136,7 @@ export function activate(context: vscode.ExtensionContext): void {
       await revealChat();
     },
     reloadHistory: () => service.reloadHistory(),
+    forgetTranscript: (sessionId) => service.forgetTimeline(sessionId),
   });
   bag.push(
     vscode.window.createTreeView(SESSIONS_VIEW_ID, {
@@ -363,6 +364,7 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
     await sessions.remove(picked.sessionId);
+    await service.forgetTimeline(picked.sessionId);
     await service.reloadHistory();
   }));
   // R9 (deep Git coupling): staged diff -> commit message -> SCM input box.

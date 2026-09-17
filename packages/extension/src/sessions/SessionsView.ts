@@ -24,6 +24,8 @@ export interface SessionsViewDeps {
   open: (sessionId: string) => Promise<void>;
   /** Keeps the webview's own history list in step after a mutation. */
   reloadHistory: () => Promise<void>;
+  /** Drops the stored transcript of a session, so a delete does not leave one behind. */
+  forgetTranscript: (sessionId: string) => Promise<void>;
 }
 
 type Node = { kind: 'new' } | { kind: 'session'; meta: SessionMeta };
@@ -116,6 +118,7 @@ export class SessionsView implements vscode.TreeDataProvider<Node> {
     );
     if (confirmed) {
       await this.deps.store.remove(meta.sessionId);
+      await this.deps.forgetTranscript(meta.sessionId);
       await this.deps.reloadHistory();
     }
   }
