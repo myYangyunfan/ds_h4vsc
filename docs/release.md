@@ -42,7 +42,7 @@ A published version is immutable — bump `version` before re-uploading; `--skip
 
 Two network traps were hit here, both worth knowing before assuming the repo or the credentials are broken:
 
-1. **`git push` over HTTP/2 fails with `RPC failed; HTTP 502`** (`send-pack: unexpected disconnect while reading sideband packet`) — something between this machine and GitHub rejects the `git-receive-pack` POST, while plain GETs and `git ls-remote` succeed. Pushing over HTTP/1.1 works; the repo's local config already pins it (`git config http.version HTTP/1.1`). If a push hangs or 502s, that is the first thing to check.
+1. **`git push` fails intermittently through this network.** HTTP/2 is rejected outright — `RPC failed; HTTP 502` on the `git-receive-pack` POST, with `send-pack: unexpected disconnect while reading sideband packet` — while plain GETs and `git ls-remote` succeed. Over HTTP/1.1 it usually goes through, but a **`HTTP 408` timeout is still common and the fix is simply to retry** (three attempts with a short sleep is enough in practice). The repo's local config already pins `http.version=HTTP/1.1`; if a push fails, retry before suspecting credentials, the remote or the commit.
 2. **Git for Windows uses schannel and fails certificate-revocation checks** on this network (`CRYPT_E_NO_REVOCATION_CHECK`), which shows up as curl/WebFetch TLS errors rather than a clean 404. `git -c http.schannelCheckRevoke=false` (git) or `curl --ssl-no-revoke` (curl) works around it. Do not add this to the repo config — it weakens TLS validation, so pass it per command.
 3. `api.github.com` is unreachable here (timeouts/502) while `github.com` is fine, so verifying a repo through the API fails even when the repo is healthy. `git ls-remote origin` is the reliable check.
 
