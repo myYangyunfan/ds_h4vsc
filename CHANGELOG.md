@@ -2,6 +2,14 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.8.8 — 让输出通道说实话
+
+三处日志问题，都来自通读一次真实会话日志后发现的"该有的没有、不该有的有"。
+
+1. **正常关窗不再报 WARN**：`DshProcess` 对任何子进程退出都记 `WARN`，包括你关闭窗口时那次正常终止。而"是否算崩溃"的判断其实在 `AcpBackend`（它才掌握代际 token 与主动停止标志），日志却在下层先喊了。改为 `INFO`，WARN 留给真正的异常
+2. **真正的内核崩溃此前不留痕**：`onCrash` 只改面板状态、不加日志，于是"内核崩了"和"窗口正常关闭"在日志里长得一样。现在崩溃会记 ERROR
+3. **打开会话失败不再无声**：这条路径既不加日志也只在面板显示状态，之前排查你报的 session 错误时，我只能从状态栏字符串反推原因。现在会记下失败的会话 id 与内核返回的消息
+
 ## 0.8.7 — 本地化文件从未被加载
 
 1. **根因**：VS Code 只按 `<l10n>/bundle.l10n.<语言>.json` 查找扩展文案（其实现里就是这一条路径，**没有** 回退到 `bundle.l10n.json` 的逻辑）。而本仓库的两个文件名叫 `bundle.l10n.json` 与 `bundle.en.l10n.json`，**两个都不是 VS Code 会读的名字**。后果：中文界面下它去读 `bundle.l10n.zh-cn.json`（不存在），日志刷出 "Failed to load translations" 与逐条 "no string found in i18n bundle" 警告（因源字符串本身是中文，界面显示侥幸正确）；英文界面下 `bundle.l10n.en.json` 同样不存在，**英文翻译从未生效过**

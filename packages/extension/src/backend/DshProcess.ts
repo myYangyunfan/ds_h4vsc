@@ -45,7 +45,11 @@ export class DshProcess {
     });
 
     child.on('exit', (code) => {
-      this.logger.warn(`Kernel exited with code ${code}`);
+      // Recorded rather than alarmed: whether this counts as a crash is the
+      // backend's call, and it is the one that knows about superseded children
+      // and intentional stops. Warning here made every window close look like a
+      // failure in the output channel.
+      this.logger.info(`Kernel process exited with code ${code}`);
       if (this.current?.child === child) {
         this.current = undefined;
       }

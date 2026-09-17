@@ -145,6 +145,10 @@ export class ChatSessionService implements vscode.Disposable {
     });
 
     this.backend.onCrash((err) => {
+      // The panel shows this too, but the output channel is what survives a
+      // window reload and what a bug report can quote - and without a line here
+      // a real crash was indistinguishable from an intentional shutdown.
+      this.logger.error('Kernel crashed', err);
       this.status = 'disconnected';
       this.statusDetail = err.message;
       this.sessionId = undefined;
@@ -384,6 +388,7 @@ export class ChatSessionService implements vscode.Disposable {
         this.setStatus('idle');
         return;
       }
+      this.logger.warn(`Could not open session ${sessionId}: ${message}`);
       this.reducer.addError(message);
       this.setStatus('error', message);
     }
