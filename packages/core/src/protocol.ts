@@ -88,6 +88,8 @@ export type FromWebview =
   | { type: 'acceptEdit'; editId: string }
   | { type: 'rejectEdit'; editId: string }
   | { type: 'acceptAllEdits' }
+  /** Dismisses the whole changes list without touching files. */
+  | { type: 'clearEdits' }
   | { type: 'newChat' }
   | { type: 'loadSession'; sessionId: string }
   | { type: 'openFilePicker' }
@@ -124,6 +126,7 @@ export function isFromWebview(value: unknown): value is FromWebview {
     'acceptEdit',
     'rejectEdit',
     'acceptAllEdits',
+    'clearEdits',
     'newChat',
     'loadSession',
     'openFilePicker',

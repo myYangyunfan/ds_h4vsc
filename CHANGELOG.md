@@ -2,6 +2,14 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.9.8 — 变更列表可折叠、可批量关闭
+
+1. **折叠**：变更列表头部新增折叠开关（chevron，带 `aria-expanded` / `aria-controls`）。折叠后只保留标题与全部操作按钮，把纵向空间还给对话；展开/折叠同时隐藏"待处理"提示。注意 `hidden` 属性本身**不足以**隐藏该列表——`.working-set-files` 的 `display: flex` 会盖过浏览器默认规则，因此显式写了 `.working-set-files[hidden] { display: none }`
+2. **批量关闭**：新增「关闭全部」，把变更从列表中一次性移除。它**不改动任何文件**（与"拒绝全部"不同，后者会把文件还原到 oldText），已做的接受/拒绝决定也保持有效——只是不再显示
+3. **端到端接线**：新消息 `clearEdits` 同时加入 `FromWebview` 联合、`isFromWebview` 白名单与 `PanelController` 分支，落到 `DiffService.dismissAll()` → `WorkingSet.clear()`，由 0.9.6 加的工作集监听推送快照
+4. **新增门禁测试** `test/webviewMessages.test.ts`：扫描 webview 源码里所有 `send({ type: '…' })` / `postToHost({…})`，断言**每一种类型都被 `isFromWebview` 接受**，并保留"未知类型仍被忽略"的断言。本会话反复出现的"按钮点了没反应"正是这一处静默丢弃造成的（接受/拒绝、逐个审查、会话控件都中过招），现在由测试守住
+5. **验证说明**：折叠与关闭的**交互验证未能运行**——内置浏览器面板连续两次无法附加。改为静态逐项确认（折叠状态、aria 属性、列表随状态隐藏、提示同步隐藏、`clearEdits` 发送、CSS 显式处理 hidden）共 7 项，全部通过；此变更的**实机确认需要用户执行**
+
 ## 0.9.7 — diff 标题栏按钮失效（0.9.6 引入的回归）
 
 1. **是我上一版打断的**。0.9.6 为修"原文件不显示"把 editId 从虚拟 URI 的 **authority** 挪进了 path，而 `extension.ts` 里 diff 标题栏的保留/取消命令正是从 `uri.authority` 取 id 的：现在取到空字符串，`if (editId)` 不成立，于是**点击后静默什么都不做**。上一版我只改了 URI 布局，没有全局搜过它的消费方

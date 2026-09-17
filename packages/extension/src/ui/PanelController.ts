@@ -128,6 +128,9 @@ export class PanelController implements vscode.WebviewViewProvider {
         case 'acceptAllEdits':
           await diff.acceptAll();
           break;
+        case 'clearEdits':
+          diff.dismissAll();
+          break;
         case 'newChat':
           await service.newChat();
           break;

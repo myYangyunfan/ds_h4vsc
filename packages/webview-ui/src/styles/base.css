@@ -1559,3 +1559,20 @@ pre code {
   font-size: 11px;
   white-space: nowrap;
 }
+
+/* The fold control at the head of the changes list. */
+.working-set-toggle {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.working-set-toggle .codicon {
+  font-size: 12px;
+}
+
+/* `hidden` alone does not fold the list: the flex display below outranks the
+   user-agent rule, so the folded state has to be stated here. */
+.working-set-files[hidden] {
+  display: none;
+}

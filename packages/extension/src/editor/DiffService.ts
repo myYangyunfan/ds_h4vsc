@@ -99,6 +99,16 @@ export class DiffService {
     this.workingSet.update({ ...edit, applied: false, state: 'rejected' });
   }
 
+  /**
+   * Empties the changes list without touching any file.
+   *
+   * Distinct from `rejectAll`: decisions already made stay made, the user just
+   * stops being shown the list. The working-set watcher pushes the result.
+   */
+  dismissAll(): void {
+    this.workingSet.clear();
+  }
+
   async acceptAll(): Promise<void> {
     for (const edit of this.workingSet.list()) {
       if (edit.state !== 'rejected') {
