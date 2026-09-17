@@ -2,7 +2,19 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
-## 1.0.0 — 版本号提升
+## 1.0.1 — macOS 上找不到内核
+
+1. **为什么是 1.0.1 而不是并进 1.0.0**：1.0.0 已经发布到市场（`yunfanyang.deepseek-harness-plus`），而**已发布的版本不可覆盖**，所以下面的修复必须走新版本号。我原本把它并进了 1.0.0 条目，是用户发现"版本号没变"才纠正过来——已经发布的版本无法重传，这一点值得记住
+2. **修掉 macOS 上"找不到内核"**。现象是：Mac 上 dsh 装好了、终端里 `dsh --version` 正常，面板却一直提示未找到。原因是**从 Dock/Finder 启动的 VS Code 继承的是 launchd 的最小 PATH**（`/usr/bin:/bin:/usr/sbin:/sbin`），不含 Homebrew、nvm 或 npm 全局目录，而原来只做了一次 `execFile('dsh')`——完全依赖宿主 PATH，在这类机器上必然失败。现在探测分三级：
+   1. 继承的 PATH（Windows 上 npm 的 `.cmd` shim 通常就在这里，所以这条路仍排在最前）
+   2. **常见安装位置**，逐目录找可执行文件：Homebrew 两个前缀（Apple Silicon 在前）、MacPorts、`~/.dsh/bin`、`~/.npm-global/bin`、`~/.local/bin`、`~/bin`、pnpm（macOS 与 Linux 两种布局）、Volta、Bun、asdf，以及 nvm / fnm / nodenv 的**版本目录**（单层 glob 展开，不引依赖）
+   3. **登录 shell 的 PATH**：`$SHELL -ilc` 打印带标记的 `$PATH`，只认标记行、取最后一次出现，因此 rc 文件的横幅噪音不会污染结果；每会话只解析一次，5 秒超时
+3. **「安装内核（dsh）」在 macOS 上同样是坏的，一起修了**：它以前 `execFile('npm')`，而 npm 也常常不在宿主 PATH 上，于是命令看起来毫无反应。现在 npm 走与 dsh 相同的三级定位，找不到时明确提示"未找到 npm，请先安装 Node.js 或在 dsh.executablePath 里填绝对路径"。顺带发现 `npm install` **原本没有传超时**（`SETUP_TIMEOUT_MS` 定义了却没用上），可能永久挂住，现已接上 5 分钟超时
+4. **「复制诊断信息」现在包含内核探测过程**：宿主 PATH、`SHELL`、候选目录数量与前几个、`dsh` 与 `npm` 各自的落点、以及每次查找的轨迹。查找失败时同一份轨迹也写进日志——这个问题只有在能看到"查了哪些目录、PATH 长什么样"时才可诊断
+5. 新增 `packages/extension/src/backend/kernelPaths.ts`（纯函数）与 **16 项测试**：Homebrew 前缀顺序、各用户级前缀、版本管理器 glob、Windows 分支（含环境变量缺失时不产生 `\pnpm` 这类垃圾路径）、shell PATH 解析（rc 噪音、多行标记、空项与重复项、自定义分隔符）。并做了三处变更检查（调换 Homebrew 顺序、取首行标记、保留空项），分别挂掉 1/2/3 项，确认测试不是空转
+6. **诚实说明**：本机是 Windows，**macOS 上的修复无法实机验证**。真机验证过的是候选清单能独立扫到本机的 `dsh.cmd` 与 `npm.cmd`（不依赖 PATH）；macOS 那部分（Homebrew 位置、登录 shell PATH）由单元测试与设计保证，仍需在 Mac 上实测确认。保底手段始终是设置 `dsh.executablePath` 为 `which dsh` 的绝对路径
+
+## 1.0.0 — 首次发布
 
 1. **版本号从 0.9.11 提升到 1.0.0**，除此之外**没有代码改动**（发布元数据的改动见第 4 条）——本次发布的内容与 0.9.11 一致。提升的依据是功能面已经不再是"试用中的半成品"：右侧对话面板、左侧会话常驻列表、原生 diff 工作集审查（逐个/全部/接受/拒绝/折叠/批量关闭）、模型与推理挡位、上下文占用、余额、选区提示、以及 macOS 的两处修复都已落地并各有测试守住
 2. 需要说明的是，`1.0.0` **不表示内核侧的所有能力都已接通**：Agent 预设（标准/PTC/极简/创造）是内核内部机制，ACP 桥上没有任何读写入口，因此面板上方显示的模式只能来自内核实际下发的 `configOptions`，客户端**看不到也无法切换预设**；这一点与版本号无关，是上游协议的现状
@@ -10,14 +22,6 @@ All notable changes to the DeepSeek Harness VS Code extension are documented her
 4. **发布元数据换成真实值**：`publisher` 由占位的 `dsh-tools` 改为实际存在的 `yunfanyang`（发布者 ID 与扩展名在首次发布后永久固定，扩展 ID 即 `yunfanyang.deepseek-harness`）；`repository` / `bugs` 由 `github.com/your-org/deepseek_harness`（点开 404）改为 `github.com/myYangyunfan/ds_h4vsc`。另外 `vsce` 只读扩展目录下的 License 文件，故把根 `LICENSE` 复制一份到 `packages/extension/LICENSE`（打包后写入 VSIX 内的 `LICENSE.txt`），消除了 `WARNING LICENSE, LICENSE.md, or LICENSE.txt not found`
 5. **README 补截图、修过期条目**：加入两张实拍截图——整窗（面板在右侧辅助侧边栏，与编辑器并排）与面板特写（流式 markdown、工具卡片、输入框下方的模型/推理挡位/上下文占用）。面板里的账户余额已做模糊处理。同时删掉设置表里**早已不存在的 `dsh.model`**（该设置在本会话早前被删除，README 一直没跟上），补上清单里漏掉的 `dsh.selectionHint`
 6. **改名：`deepseek-harness` 已被占用**。发布时发现市场里已经有 **25 个** "DeepSeek Harness" 扩展，其中 `WentaoJIang.deepseek-harness` 直接占用了 `deepseek-harness` 这个名字（扩展名在全市场唯一，不区分发布者）。改为 **`deepseek-harness-plus`**，显示名 **DeepSeek Harness++**——`+` 只能放在显示名里，清单的 `name` 字段**不接受 `+`**，`vsce package` 会直接报 `Invalid extension "name"`（已实测）。因此本次发布的**最终扩展 ID 是 `yunfanyang.deepseek-harness-plus`**，覆盖第 4 条里写的 `yunfanyang.deepseek-harness`。副作用：扩展 ID 变了，旧 ID 下的 workspaceState 会读不到（历史对话需重新累积），托管内核目录也会按新 ID 重建
-7. **修掉 macOS 上"找不到内核"**。现象是：Mac 上 dsh 装好了、终端里 `dsh --version` 正常，面板却一直提示未找到。原因是**从 Dock/Finder 启动的 VS Code 继承的是 launchd 的最小 PATH**（`/usr/bin:/bin:/usr/sbin:/sbin`），不含 Homebrew、nvm 或 npm 全局目录，而原来只做了一次 `execFile('dsh')`——完全依赖宿主 PATH，在这类机器上必然失败。现在探测分三级：
-   1. 继承的 PATH（Windows 上 npm 的 `.cmd` shim 通常就在这里，所以这条路仍排在最前）
-   2. **常见安装位置**，逐目录找可执行文件：Homebrew 两个前缀（Apple Silicon 在前）、MacPorts、`~/.dsh/bin`、`~/.npm-global/bin`、`~/.local/bin`、`~/bin`、pnpm（macOS 与 Linux 两种布局）、Volta、Bun、asdf，以及 nvm / fnm / nodenv 的**版本目录**（单层 glob 展开，不引依赖）
-   3. **登录 shell 的 PATH**：`$SHELL -ilc` 打印带标记的 `$PATH`，只认标记行、取最后一次出现，因此 rc 文件的横幅噪音不会污染结果；每会话只解析一次，5 秒超时
-8. **「安装内核（dsh）」在 macOS 上同样是坏的，一起修了**：它以前 `execFile('npm')`，而 npm 也常常不在宿主 PATH 上，于是命令看起来毫无反应。现在 npm 走与 dsh 相同的三级定位，找不到时明确提示"未找到 npm，请先安装 Node.js 或在 dsh.executablePath 里填绝对路径"。顺带发现 `npm install` **原本没有传超时**（`SETUP_TIMEOUT_MS` 定义了却没用上），可能永久挂住，现已接上 5 分钟超时
-9. **「复制诊断信息」现在包含内核探测过程**：宿主 PATH、`SHELL`、候选目录数量与前几个、`dsh` 与 `npm` 各自的落点、以及每次查找的轨迹。查找失败时同一份轨迹也写进日志——这个问题只有在能看到"查了哪些目录、PATH 长什么样"时才可诊断
-10. 新增 `packages/extension/src/backend/kernelPaths.ts`（纯函数）与 **16 项测试**：Homebrew 前缀顺序、各用户级前缀、版本管理器 glob、Windows 分支（含环境变量缺失时不产生 `\pnpm` 这类垃圾路径）、shell PATH 解析（rc 噪音、多行标记、空项与重复项、自定义分隔符）。并做了三处变更检查（调换 Homebrew 顺序、取首行标记、保留空项），分别挂掉 1/2/3 项，确认测试不是空转
-11. **诚实说明**：本机是 Windows，**macOS 上的修复无法实机验证**。真机验证过的是候选清单能独立扫到本机的 `dsh.cmd` 与 `npm.cmd`（不依赖 PATH）；macOS 那部分（Homebrew 位置、登录 shell PATH）由单元测试与设计保证，仍需你在 Mac 上实测确认
 
 ## 0.9.11 — macOS 适配
 

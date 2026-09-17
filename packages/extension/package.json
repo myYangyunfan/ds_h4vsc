@@ -2,7 +2,7 @@
   "name": "deepseek-harness-plus",
   "displayName": "DeepSeek Harness++",
   "description": "%ext.description%",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "yunfanyang",
   "license": "MIT",
   "icon": "media/icon.png",
