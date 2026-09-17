@@ -73,7 +73,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   // Wire persistence + restore the previous session's timeline.
   service.setMemento(context.workspaceState);
-  void service.restoreTimeline();
+  void service.restoreTimeline().then(() => service.primeSession());
   void service.refreshBalance(true);
 
   const extensionVersion = readExtensionVersion(context);

@@ -193,6 +193,34 @@ export class ChatSessionService implements vscode.Disposable {
     this.settingsRef = settings;
   }
 
+  /**
+   * Opens the restored session in the kernel without waiting for a prompt.
+   *
+   * The kernel reports its session settings - the model picker, the reasoning
+   * level - only from `session/new` or `session/resume`. A panel that merely
+   * restored a transcript therefore had nothing to show, and the controls read
+   * as missing until the user happened to send a message.
+   */
+  async primeSession(): Promise<void> {
+    if (!this.sessionId || this.activeSessionId === this.sessionId) {
+      return;
+    }
+    try {
+      const handlers = await this.ensureKernel();
+      await this.ensureSessionActive(handlers);
+      // Logged because "the controls are missing" was invisible otherwise: the
+      // panel looked the same whether the kernel reported no options or was
+      // never contacted at all.
+      this.logger.info(
+        `Prepared session ${this.sessionId} with ${this.configOptions.length} config option(s)`,
+      );
+      this.flushSnapshot();
+    } catch (err) {
+      // Best-effort: an unreachable kernel is retried when the user sends.
+      this.logger.warn(`Could not prepare the restored session: ${String(err)}`);
+    }
+  }
+
   /** Supplies the balance the panel displays; the host owns the credentials. */
   setBalanceProvider(provider: () => Promise<AccountBalance | undefined>): void {
     this.balanceProvider = provider;
