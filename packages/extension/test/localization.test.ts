@@ -5,7 +5,7 @@
  * mixed languages and nothing ever errors. These checks run in CI instead.
  */
 import { readFileSync } from 'node:fs';
-import { globSync } from 'node:fs';
+import { globSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -21,8 +21,8 @@ const manifest = readJson<{
 }>('package.json');
 const nlsZh = readJson<Record<string, string>>('package.nls.json');
 const nlsEn = readJson<Record<string, string>>('package.nls.en.json');
-const bundleZh = readJson<Record<string, string>>('l10n/bundle.l10n.json');
-const bundleEn = readJson<Record<string, string>>('l10n/bundle.en.l10n.json');
+const bundleZh = readJson<Record<string, string>>('l10n/bundle.l10n.zh-cn.json');
+const bundleEn = readJson<Record<string, string>>('l10n/bundle.l10n.en.json');
 
 function l10nCalls(): string[] {
   const keys: string[] = [];
@@ -74,5 +74,27 @@ describe('contributed views', () => {
       .map((view) => view.id);
     const declared = new Set(manifest.activationEvents);
     expect(viewIds.filter((id) => !declared.has(`onView:${id}`))).toEqual([]);
+  });
+});
+
+describe('bundle filenames', () => {
+  it('uses the names VS Code actually loads', () => {
+    // VS Code resolves extension strings from exactly
+    // `<l10n>/bundle.l10n.<currentLanguage>.json` - there is no fallback to
+    // `bundle.l10n.json`. A file named any other way is never read, so the
+    // strings silently stay in the source language and every lookup logs
+    // "no string found in i18n bundle".
+    const files = readdirSync(join(pkgDir, 'l10n'));
+    expect(files.length).toBeGreaterThan(0);
+    const unexpected = files.filter((name) => !/^bundle\.l10n\.[a-z]{2}(-[a-z0-9]+)?\.json$/.test(name));
+    expect(unexpected).toEqual([]);
+  });
+
+  it('ships a bundle for every language the sources are written for', () => {
+    const files = readdirSync(join(pkgDir, 'l10n'));
+    // Chinese is the source language, so zh-cn is an identity mapping; en is the
+    // translation. Both must exist for either UI to resolve its strings.
+    expect(files).toContain('bundle.l10n.zh-cn.json');
+    expect(files).toContain('bundle.l10n.en.json');
   });
 });

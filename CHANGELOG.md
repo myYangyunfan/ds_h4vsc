@@ -2,6 +2,12 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.8.7 — 本地化文件从未被加载
+
+1. **根因**：VS Code 只按 `<l10n>/bundle.l10n.<语言>.json` 查找扩展文案（其实现里就是这一条路径，**没有** 回退到 `bundle.l10n.json` 的逻辑）。而本仓库的两个文件名叫 `bundle.l10n.json` 与 `bundle.en.l10n.json`，**两个都不是 VS Code 会读的名字**。后果：中文界面下它去读 `bundle.l10n.zh-cn.json`（不存在），日志刷出 "Failed to load translations" 与逐条 "no string found in i18n bundle" 警告（因源字符串本身是中文，界面显示侥幸正确）；英文界面下 `bundle.l10n.en.json` 同样不存在，**英文翻译从未生效过**
+2. **修复**：重命名为 `bundle.l10n.zh-cn.json`（恒等映射）与 `bundle.l10n.en.json`
+3. **防回归**：本地化门禁测试改为校验真实文件名，并新增两条断言——l10n 目录下的文件名必须匹配 `bundle.l10n.<语言>.json`，且中英两份都必须存在。已用"故意放一个错误命名文件"验证过该守卫确实会失败
+
 ## 0.8.6 — 对话流畅度
 
 1. **时间线不再每次推送都落盘**：`flushSnapshot` 原本每次都调用 `persistTimeline()`，把**整个时间线写进 workspaceState**——流式期间约每秒十几次全量磁盘写。改为合并写入（最长 1.5s 一次），并在回合结束（status 变为 idle/error）与销毁时立即写，兼顾流畅与不丢数据
