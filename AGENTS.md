@@ -71,6 +71,7 @@ Debugging the extension itself: open the folder in VS Code and press F5 (`.vscod
 - **Windows shims:** `.cmd`/`.bat`/`.ps1` cannot be spawned with `shell: false` (EINVAL since Node's CVE-2024-27980 fix) — route through `shell: true`. With `shell: true`, arguments containing spaces or shell metacharacters must be quoted by hand; several earlier bugs came from exactly this.
 - **Plugin/kernel version mismatch fails with missing exports**, which surfaces as an opaque handshake timeout rather than a clear error.
 - Verify a change against a real kernel with `pnpm --filter deepseek-harness run verify:kernel` (success output: `SUCCESS - the kernel speaks ACP`); the CI-shaped equivalent is the integration test against `packages/extension/test/mock-agent.mjs`, a real child process speaking ACP over stdio. Changing the mock agent is expected when the wire behavior changes.
+- **Pushing to GitHub from this machine is not plain `git push`.** HTTP/2 gets `RPC failed; HTTP 502` on `git-receive-pack` while GETs and `git ls-remote` work — the repo's local config pins `http.version=HTTP/1.1` to work around it. Certificate-revocation checks also fail on this network, so git/curl may need `-c http.schannelCheckRevoke=false` / `--ssl-no-revoke` per command. `api.github.com` is unreachable even when `github.com` is not. Details in `docs/release.md`.
 
 ## Before you ship
 
