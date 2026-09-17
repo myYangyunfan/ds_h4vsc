@@ -42,6 +42,17 @@ function currencySymbol(currency: string): string {
   }
 }
 
+/** Icon for a config option, so the control is identifiable at a glance. */
+function configOptionIcon(option: SessionConfigOption): string {
+  if (option.id === 'model') {
+    return 'codicon-hubot';
+  }
+  if (option.category === 'thought_level' || option.id.includes('reasoning')) {
+    return 'codicon-lightbulb';
+  }
+  return 'codicon-settings-gear';
+}
+
 /** Title for a config option, preferring a localised name for the known ones. */
 function configOptionLabel(option: SessionConfigOption, t: T): string {
   if (option.id === 'model') {
@@ -63,14 +74,48 @@ export function Header({ state, send }: HeaderProps) {
   const { init, history, canLoadSession, modes, modeId, configOptions, usage, authMethods, status } = state;
   const hasUsage = usage !== undefined && usage.size > 0;
   const usedShare = hasUsage ? Math.min(1, usage.used / usage.size) : 0;
+  const hasHistory = canLoadSession && history.length > 0;
+  // An empty toolbar row would just eat vertical space in a narrow panel.
+  const hasToolbar =
+    configOptions.length > 0 || modes.length > 0 || hasUsage || state.balance !== undefined || hasHistory;
 
   return (
     <header className="header">
+      <div className="header-row">
       <div className="header-title" title={`DeepSeek Harness${init ? ` v${init.extensionVersion}` : ''}`}>
         <span className={`header-dot status-${status}`} aria-hidden />
         <span>DeepSeek Harness</span>
       </div>
       <div className="header-actions">
+        <button className="icon-button" title={t('newChat')} onClick={() => send({ type: 'newChat' })}>
+          <i className="codicon codicon-add" />
+        </button>
+        <div className="header-menu">
+          <button className="icon-button" title={t('moreActions')}>
+            <i className="codicon codicon-kebab-vertical" />
+          </button>
+          <div className="header-menu-list">
+            <button onClick={() => send({ type: 'hostCommand', command: 'exportChat' })}>
+              <i className="codicon codicon-export" /> {t('exportChat')}
+            </button>
+            <button onClick={() => send({ type: 'hostCommand', command: 'renameSession' })}>
+              <i className="codicon codicon-edit" /> {t('renameSession')}
+            </button>
+            <button onClick={() => send({ type: 'hostCommand', command: 'deleteSession' })}>
+              <i className="codicon codicon-trash" /> {t('deleteSession')}
+            </button>
+            <button onClick={() => send({ type: 'hostCommand', command: 'gitCommitMessage' })}>
+              <i className="codicon codicon-git-commit" /> {t('gitCommit')}
+            </button>
+          </div>
+        </div>
+        <button className="icon-button" title={t('settings')} onClick={() => send({ type: 'openSettings' })}>
+          <i className="codicon codicon-settings-gear" />
+        </button>
+      </div>
+      </div>
+      {hasToolbar && (
+      <div className="header-toolbar">
         {modes.length > 0 && (
           <select
             className="header-select"
@@ -91,16 +136,16 @@ export function Header({ state, send }: HeaderProps) {
           Values are opaque strings echoed back untouched.
         */}
         {configOptions.map((option) => (
-          <select
-            key={option.id}
-            className="header-select"
-            value={option.currentValue}
-            title={configOptionLabel(option, t)}
-            aria-label={configOptionLabel(option, t)}
-            onChange={(event) =>
-              send({ type: 'setConfigOption', optionId: option.id, value: event.target.value })
-            }
-          >
+          <label key={option.id} className="toolbar-field" title={configOptionLabel(option, t)}>
+            <i className={`codicon ${configOptionIcon(option)}`} aria-hidden />
+            <select
+              className="header-select"
+              value={option.currentValue}
+              aria-label={configOptionLabel(option, t)}
+              onChange={(event) =>
+                send({ type: 'setConfigOption', optionId: option.id, value: event.target.value })
+              }
+            >
             {configChoiceGroups(option.options).map((group, index) => {
               const values = group.values.map((value) => (
                 <option key={value.value} value={value.value} title={value.description}>
@@ -114,8 +159,9 @@ export function Header({ state, send }: HeaderProps) {
               ) : (
                 values
               );
-            })}
-          </select>
+              })}
+            </select>
+          </label>
         ))}
         {state.balance && (
           <span
@@ -150,7 +196,7 @@ export function Header({ state, send }: HeaderProps) {
             </span>
           </span>
         )}
-        {canLoadSession && history.length > 0 && (
+        {hasHistory && (
           <select
             className="header-select"
             value=""
@@ -170,32 +216,8 @@ export function Header({ state, send }: HeaderProps) {
             ))}
           </select>
         )}
-        <button className="icon-button" title={t('newChat')} onClick={() => send({ type: 'newChat' })}>
-          <i className="codicon codicon-add" />
-        </button>
-        <div className="header-menu">
-          <button className="icon-button" title={t('moreActions')}>
-            <i className="codicon codicon-kebab-vertical" />
-          </button>
-          <div className="header-menu-list">
-            <button onClick={() => send({ type: 'hostCommand', command: 'exportChat' })}>
-              <i className="codicon codicon-export" /> {t('exportChat')}
-            </button>
-            <button onClick={() => send({ type: 'hostCommand', command: 'renameSession' })}>
-              <i className="codicon codicon-edit" /> {t('renameSession')}
-            </button>
-            <button onClick={() => send({ type: 'hostCommand', command: 'deleteSession' })}>
-              <i className="codicon codicon-trash" /> {t('deleteSession')}
-            </button>
-            <button onClick={() => send({ type: 'hostCommand', command: 'gitCommitMessage' })}>
-              <i className="codicon codicon-git-commit" /> {t('gitCommit')}
-            </button>
-          </div>
-        </div>
-        <button className="icon-button" title={t('settings')} onClick={() => send({ type: 'openSettings' })}>
-          <i className="codicon codicon-settings-gear" />
-        </button>
       </div>
+      )}
       {state.init?.hasApiKey === false && (
         <div className="retry-banner info">
           <i className="codicon codicon-key" />

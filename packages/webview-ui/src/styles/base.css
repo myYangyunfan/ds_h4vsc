@@ -87,6 +87,44 @@ body {
   }
 }
 
+
+/* Header layout: identity and buttons on one row, the session controls on a
+   second one that wraps. The chat panel lives in a narrow side bar, so a single
+   row could not hold the pickers and they were clipped out of sight. */
+.header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.header-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+}
+
+/* An icon plus its picker, so a control says what it is without a tooltip. */
+.toolbar-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vscode-descriptionForeground);
+  min-width: 0;
+}
+
+.toolbar-field > i {
+  font-size: 13px;
+}
+
+.toolbar-field .header-select {
+  max-width: 150px;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
