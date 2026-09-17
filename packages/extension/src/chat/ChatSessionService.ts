@@ -94,6 +94,7 @@ export class ChatSessionService implements vscode.Disposable {
    * Without this the picker would look settable and silently do nothing.
    */
   private readonly pendingConfig = new Map<string, string>();
+  private unwatchWorkingSet: (() => void) | undefined;
   /** Account balance; ACP has no billing, so the host fetches it itself. */
   private balance: AccountBalance | undefined;
   /** Supplies the balance on demand; injected by the extension host. */
@@ -152,6 +153,7 @@ export class ChatSessionService implements vscode.Disposable {
     this.contexts = contexts;
     this.settingsRef = settings;
     this.logger = logger;
+    this.watchWorkingSet();
     this.sink = {
       pushSnapshot: (payload) => this.postToPanel(payload),
       pushChunk: (entryId, textDelta, thoughtDelta) => {
@@ -273,6 +275,18 @@ export class ChatSessionService implements vscode.Disposable {
     } finally {
       this.balanceRefreshing = false;
     }
+  }
+
+  /**
+   * Keeps the panel in step with the working set.
+   *
+   * Accepting or rejecting an edit changes the working set, and the panel renders
+   * it from snapshots - without this the bar kept showing the old states, so the
+   * review buttons looked like they did nothing even though the file on disk had
+   * already changed.
+   */
+  private watchWorkingSet(): void {
+    this.unwatchWorkingSet = this.workingSet.onChange(() => this.scheduleSnapshot());
   }
 
   /** Wires workspaceState-backed timeline persistence. */
@@ -690,6 +704,7 @@ export class ChatSessionService implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.unwatchWorkingSet?.();
     if (this.snapshotTimer) {
       clearTimeout(this.snapshotTimer);
     }

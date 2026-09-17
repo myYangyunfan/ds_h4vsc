@@ -2,6 +2,12 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.9.6 — 审查按钮"没任何用"与 diff 原文件
+
+1. **按钮其实生效了，只是界面不刷新**。读持久化数据发现工作集里两条变更都已是 `state=rejected, applied=false`——说明点击确实传到了宿主并改了状态。但 `workingSet.onChange` **只被用于更新状态栏徽标，没有任何地方推送快照**，而面板完全靠快照渲染，于是列表一直显示旧状态，"逐个审查/全部保留/拒绝全部"看起来毫无作用。现由 `ChatSessionService` 订阅工作集变化并推送（与 `SessionStore.onChange` 同一模式），状态文案（已保留/已拒绝/待审查）与配色本就有，现在才真正显示出来
+2. **diff 不显示原文件**：原文件即虚拟 URI 一侧，由内容提供者按 `edit.oldText` 供给。原先把 `editId` 放在 URI 的 **authority**、文件名原样放在 path——而 editId 含大量下划线且形如 `edit-call_00_ET_…`，文件名是中文（实测为 `KNN_分类.py`）。URI 组件未编码会被有损解析，那一侧就变成空白，看起来就是"原文件不见了"。现把 id 与文件名一并 `encodeURIComponent` 进 path，解析时解码
+3. **诊断**：打开 diff 记一行 `Diff <id>: <path> (applied=…, old=N chars, new=M chars)`；内容提供者解析失败或找不到条目时记警告（此前那一侧只是静默空白，无从判断）
+
 ## 0.9.5 — 新对话后控件消失
 
 1. **问题**：用户报"对话框下方什么都没显示"。用**已安装的 0.9.4 产物**在真实浏览器里按侧栏尺寸渲染，控件行确实存在且在输入框下方（`metaFullyVisible: true`，两个下拉都在，无渲染错误），宿主日志也显示拿到了 2 个配置项——所以包和渲染都没问题

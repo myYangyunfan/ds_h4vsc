@@ -52,6 +52,10 @@ export class DiffService {
 
     const left = this.virtualUri(edit, 'old');
     const right = edit.applied ? fileUri : this.virtualUri(edit, 'new');
+    this.logger.info(
+      `Diff ${edit.editId}: ${edit.path} (applied=${edit.applied}, ` +
+        `old=${edit.oldText?.length ?? 'none'} chars, new=${edit.newText.length} chars)`,
+    );
     await vscode.commands.executeCommand('vscode.diff', left, right, title, { preview: true });
   }
 
@@ -148,22 +152,34 @@ export class DiffService {
 
   // -------------------------------------------------------------------------
 
+  /**
+   * A URI for one side of an edit, served by the content provider.
+   *
+   * Both the edit id and the file name are percent-encoded into the path rather
+   * than carried raw: ids contain underscores and file names are frequently
+   * non-ASCII, and a URI component that is not encoded is resolved lossily (the
+   * diff editor then shows an empty side, which reads as "the original is
+   * missing").
+   */
   private virtualUri(edit: EditInfo, side: 'old' | 'new'): vscode.Uri {
-    const name = path.basename(edit.path);
+    const name = encodeURIComponent(path.basename(edit.path));
     return vscode.Uri.from({
       scheme: EDIT_SCHEME,
-      authority: edit.editId,
-      path: `/${side}/${name}`,
+      path: `/${side}/${encodeURIComponent(edit.editId)}/${name}`,
     });
   }
 
   private provideContent(uri: vscode.Uri): string {
     const parsed = parseEditUri(uri);
     if (!parsed) {
+      this.logger.warn(`Unrecognised edit uri: ${uri.toString()}`);
       return '';
     }
     const edit = this.workingSet.get(parsed.editId);
     if (!edit) {
+      // The diff editor is asking for a change the working set no longer holds;
+      // without this line the pane is just silently blank.
+      this.logger.warn(`No working-set entry for ${parsed.editId}`);
       return '';
     }
     return parsed.side === 'old' ? (edit.oldText ?? '') : edit.newText;
@@ -190,9 +206,13 @@ export class DiffService {
 }
 
 function parseEditUri(uri: vscode.Uri): ParsedEditUri | undefined {
-  const side = uri.path.split('/')[1];
-  if (!uri.authority || (side !== 'old' && side !== 'new')) {
+  const [, side, rawId] = uri.path.split('/');
+  if ((side !== 'old' && side !== 'new') || !rawId) {
     return undefined;
   }
-  return { editId: uri.authority, side };
+  try {
+    return { editId: decodeURIComponent(rawId), side };
+  } catch {
+    return undefined;
+  }
 }
