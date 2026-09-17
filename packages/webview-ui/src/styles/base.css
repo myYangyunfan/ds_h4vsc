@@ -88,24 +88,21 @@ body {
 }
 
 
-/* Header layout: identity and buttons on one row, the session controls on a
-   second one that wraps. The chat panel lives in a narrow side bar, so a single
-   row could not hold the pickers and they were clipped out of sight. */
-.header-row {
+
+
+/* Session controls sit under the composer: a full-width row that has space for
+   the model picker and the context meter, which the narrow header did not. */
+.composer-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
+  gap: 10px;
+  flex-wrap: wrap;
   min-width: 0;
+  padding: 6px 2px 0;
 }
 
-.header-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  width: 100%;
-  min-width: 0;
+.composer-meta .header-select {
+  max-width: 150px;
 }
 
 /* An icon plus its picker, so a control says what it is without a tooltip. */

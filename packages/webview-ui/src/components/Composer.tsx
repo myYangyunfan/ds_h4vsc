@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ContextAttachment, SessionStatus, SlashCommandInfo } from '@dsh-vscode/core';
+import type { ContextAttachment, FromWebview, SessionConfigOption, SessionStatus, SlashCommandInfo } from '@dsh-vscode/core';
+import { SessionControls } from './SessionControls.js';
 import { useCommandDescription, useT } from '../strings.js';
 import { postToHost } from '../vscode.js';
 
@@ -15,7 +16,10 @@ interface ComposerProps {
   onSubmit(text: string): void;
   onCancel(): void;
   onRemoveChip(chipId: string): void;
-  onPickFile(): void;
+  onPickFile(): void;  configOptions: SessionConfigOption[];
+  usage?: { used: number; size: number };
+  modes?: Array<{ id: string; name: string }>;
+  modeId?: string;
 }
 
 export function Composer({
@@ -30,6 +34,10 @@ export function Composer({
   onCancel,
   onRemoveChip,
   onPickFile,
+  configOptions,
+  usage,
+  modes,
+  modeId,
 }: ComposerProps) {
   const t = useT();
   const describeCommand = useCommandDescription();
@@ -186,6 +194,14 @@ export function Composer({
           </button>
         )}
       </div>
+
+      <SessionControls
+        configOptions={configOptions}
+        usage={usage}
+        modes={modes}
+        modeId={modeId}
+        send={postToHost as (message: FromWebview) => void}
+      />
 
       <div className="composer-footer">
         <span className={`composer-status status-${status}`}>{statusDetail ?? status}</span>

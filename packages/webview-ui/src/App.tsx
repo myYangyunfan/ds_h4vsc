@@ -43,6 +43,10 @@ export function App() {
               onCancel={handleCancel}
               onRemoveChip={removeChip}
               onPickFile={handlePickFile}
+              configOptions={state.configOptions}
+              usage={state.usage}
+              modes={state.modes}
+              modeId={state.modeId}
             />
           </footer>
         </div>

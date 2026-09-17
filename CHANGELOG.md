@@ -2,6 +2,13 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.9.4 — 会话控件移到输入框下方
+
+1. **真 bug：resume 的结果被丢弃**。0.9.3 的 `primeSession` 日志写着 `Prepared session … with 0 config option(s)`，但我用**同一个会话 id** 单独探测，内核明确返回 2 个配置项。差别在于 `ensureSessionActive()` 拿到 resume 结果后**只记了 activeSessionId，没把 configOptions 赋给服务状态**——所以模型与推理档位始终为空。现抽出 `applySessionState()` 供三处调用点共用，避免再次遗漏
+2. **布局按用户要求重排**：模型、推理档位、上下文用量从头部移到**输入框下方**的整行（`composer-meta`），头部只保留标题、余额、会话下拉与图标按钮，不再拥挤
+3. **抽成共用组件** `SessionControls`：下拉与用量条集中一处，ACP 模式（若内核提供）也归入同一行——dsh 没有模式，但别的内核可能有
+4. **验证说明**：本次位置改动以源码顺序与 CSS 规则静态确认（输入框 → 控件行 → 底部提示，控件行为可换行整行），**没有做浏览器渲染截图**——当时内置浏览器面板不可用。上一轮同类问题正是栽在"没实测布局"上，所以这里明确标注
+
 ## 0.9.3 — 重载后模型选项为空
 
 1. **问题**：0.9.2 修了布局，但用户重载后仍看不到控件。读实际日志确认：面板只执行了 `Restored timeline for 1fea7bf4…: 6 entries`，**整个日志里没有任何内核启动或会话活动**——面板恢复了对话内容，却从未与内核建立会话

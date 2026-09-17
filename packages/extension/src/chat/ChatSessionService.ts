@@ -33,6 +33,7 @@ import {
 } from '@dsh-vscode/core';
 import { buildSnapshot } from './EventMapper.js';
 import type { AcpBackend } from '../backend/AcpBackend.js';
+import type { SessionHandle } from '../backend/AcpClient.js';
 import type { WorkingSet } from '../editor/WorkingSet.js';
 import { FileChangeTracker, type DerivedEdit } from '../editor/FileChangeTracker.js';
 import type { ContextService } from '../editor/ContextService.js';
@@ -370,9 +371,7 @@ export class ChatSessionService implements vscode.Disposable {
         const handle = await this.backend.newSession(this.workspaceRoot(), handlers);
         this.sessionId = handle.sessionId;
         this.activeSessionId = handle.sessionId;
-        this.modes = handle.modes;
-        this.modeId = handle.modeId;
-        this.configOptions = handle.configOptions;
+        this.applySessionState(handle);
         const defaultTitle = trimmed.slice(0, 60);
         await this.ensureSessionListed(handle.sessionId, defaultTitle);
         // R9: replace the truncated-default title with an AI-generated one.
@@ -492,9 +491,7 @@ export class ChatSessionService implements vscode.Disposable {
       const handle = await this.backend.loadSession(this.workspaceRoot(), sessionId, handlers);
       this.sessionId = handle.sessionId;
       this.activeSessionId = handle.sessionId;
-      this.modes = handle.modes;
-      this.modeId = handle.modeId;
-      this.configOptions = handle.configOptions;
+      this.applySessionState(handle);
       // The kernel resumes the session but does not replay its messages, so the
       // transcript comes from what was stored while it was live.
       const restored = this.restoreSessionTimeline(handle.sessionId);
@@ -544,6 +541,10 @@ export class ChatSessionService implements vscode.Disposable {
     try {
       const handle = await this.backend.loadSession(this.workspaceRoot(), target, handlers);
       this.activeSessionId = handle.sessionId;
+      // Apply what the resume reported. Discarding it left the session
+      // configuration empty, so the model and reasoning pickers had nothing to
+      // show even though the kernel had just handed them over.
+      this.applySessionState(handle);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (isAlreadyActive(message)) {
@@ -551,6 +552,17 @@ export class ChatSessionService implements vscode.Disposable {
         return;
       }
       throw err;
+    }
+  }
+
+  /** Copies the session state the kernel reported onto the live snapshot. */
+  private applySessionState(handle: SessionHandle): void {
+    if (handle.modes.length > 0) {
+      this.modes = handle.modes;
+      this.modeId = handle.modeId;
+    }
+    if (handle.configOptions.length > 0) {
+      this.configOptions = handle.configOptions;
     }
   }
 
