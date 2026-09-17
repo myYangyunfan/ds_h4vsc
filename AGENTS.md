@@ -74,7 +74,7 @@ Debugging the extension itself: open the folder in VS Code and press F5 (`.vscod
 
 ## Before you ship
 
-`packages/extension/deepseek-harness-0.1.0.vsix` is a stale, gitignored artifact from long ago (the extension is at 0.8.0). Do not treat its version as current, and do not ship it — build fresh with `pnpm package`.
+`packages/extension/deepseek-harness-0.1.0.vsix` is a stale, gitignored artifact from long ago (the extension is at 1.0.0). Do not treat its version as current, and do not ship it — build fresh with `pnpm package`.
 
 - Pre-flight: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm package`.
 - Manual matrix (see `docs/testing.md`): Windows/macOS/Linux, light/dark/high-contrast, kernel upgrade smoke, kill-the-kernel-process reconnect.

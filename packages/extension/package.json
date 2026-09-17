@@ -2,7 +2,7 @@
   "name": "deepseek-harness",
   "displayName": "DeepSeek Harness",
   "description": "%ext.description%",
-  "version": "0.9.11",
+  "version": "1.0.0",
   "publisher": "dsh-tools",
   "license": "MIT",
   "icon": "media/icon.png",
