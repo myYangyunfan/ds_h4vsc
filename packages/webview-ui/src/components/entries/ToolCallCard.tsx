@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import type { ToolCallInfo } from '@dsh-vscode/core';
 import { useT } from '../../strings.js';
 
@@ -33,7 +33,7 @@ const STATUS_ICONS: Record<string, string> = {
   failed: 'codicon-error',
 };
 
-export function ToolCallCard({ toolCall }: { toolCall: ToolCallInfo }) {
+export const ToolCallCard = memo(function ToolCallCard({ toolCall }: { toolCall: ToolCallInfo }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const hasDetail = Boolean(toolCall.detailText) || Boolean(toolCall.diff);
@@ -65,7 +65,7 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCallInfo }) {
       )}
     </div>
   );
-}
+});
 
 function base(p: string): string {
   const idx = p.lastIndexOf('/');

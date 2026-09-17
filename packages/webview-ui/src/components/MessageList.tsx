@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { QuickActionId, SessionStatus, TimelineEntry } from '@dsh-vscode/core';
 import type { FromWebview } from '@dsh-vscode/core';
 import { useT, type T } from '../strings.js';
@@ -37,17 +37,21 @@ const QUICK_ACTIONS: Array<{ id: QuickActionId; icon: string; labelKey: 'qaExpla
   { id: 'init', icon: 'codicon-terminal', labelKey: 'qaInit' },
 ];
 
-export function MessageList({ entries, status, send, onEdit }: MessageListProps) {
+function MessageListImpl({ entries, status, send, onEdit }: MessageListProps) {
   const t = useT();
   const scroller = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const [showJump, setShowJump] = useState(false);
   const [query, setQuery] = useState('');
-  const lastAssistantId = findLastAssistantId(entries);
+  const lastAssistantId = useMemo(() => findLastAssistantId(entries), [entries]);
   const showSearch = entries.length > 8;
-  const filtered = query.trim()
-    ? entries.filter((entry) => entryText(entry).toLowerCase().includes(query.trim().toLowerCase()))
-    : entries;
+  const trimmedQuery = query.trim().toLowerCase();
+  // Filtering walks every entry and lower-cases its text, so keep it off the
+  // path of every chunk-driven render.
+  const filtered = useMemo(
+    () => (trimmedQuery ? entries.filter((entry) => entryText(entry).toLowerCase().includes(trimmedQuery)) : entries),
+    [entries, trimmedQuery],
+  );
 
   useEffect(() => {
     const el = scroller.current;
@@ -183,6 +187,13 @@ export function MessageList({ entries, status, send, onEdit }: MessageListProps)
     </div>
   );
 }
+
+/**
+ * Memoised: the list re-renders on every chunk while a reply streams, and
+ * entries that a snapshot did not change keep their identity (see
+ * `reconcileEntries`), so React can skip the untouched ones.
+ */
+export const MessageList = memo(MessageListImpl);
 
 function findLastAssistantId(entries: TimelineEntry[]): string | undefined {
   for (let i = entries.length - 1; i >= 0; i--) {

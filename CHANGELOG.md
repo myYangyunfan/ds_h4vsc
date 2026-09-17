@@ -2,6 +2,14 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.8.6 — 对话流畅度
+
+1. **时间线不再每次推送都落盘**：`flushSnapshot` 原本每次都调用 `persistTimeline()`，把**整个时间线写进 workspaceState**——流式期间约每秒十几次全量磁盘写。改为合并写入（最长 1.5s 一次），并在回合结束（status 变为 idle/error）与销毁时立即写，兼顾流畅与不丢数据
+2. **快照按"是否有结构变化"分级推送**：条目数变化（新消息、工具卡、计划）立即推送保持不变；仅已有条目的内容在增长时，因为文本本来就通过 `chunk` 增量传输，整份快照的间隔放宽到 250ms。此前两者都是 80ms，而每次快照都要在宿主与 webview **两侧各克隆一次完整时间线**
+3. **webview 只为真正变化的条目重渲染**：快照来自新解析的数据，此前每个条目对象身份都变，导致 memo 全部失效——整段对话的 markdown 每秒被重复解析多次。新增 `reconcileEntries`（放在 core，纯逻辑并单测覆盖）让内容未变的条目**保留原对象引用**，React 得以跳过
+4. **补齐 memo 与惰性计算**：`MessageList` 及 `ToolCallCard`/`PlanCard`/`EditCard`/`ApprovalCard`/`ErrorEntry` 加 memo；列表过滤与"最后一条助手消息"查找移入 `useMemo`；App 里传给列表的回调改为 `useCallback`（原为内联箭头函数，会架空 memo）
+5. **修掉 `reconcileEntries` 自身的一个 bug**：长度相同、条目内容都没变但**顺序改变**时，原实现会直接返回旧数组而丢弃新顺序——由新单测发现
+
 ## 0.8.5 — 修复 "session is already active"
 
 1. **根因**：内核的会话在 `session/new` / `session/resume` 后**保持活动**，直到被 `close`；恢复一个还在活动的会话会被拒绝并回 `Invalid params: session is already active`。而 `newChat()` 只清空本地 `sessionId`、从不通知内核，于是内核里那个会话一直挂着，之后再恢复它就必然报错

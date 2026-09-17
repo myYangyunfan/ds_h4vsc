@@ -350,3 +350,52 @@ export class TimelineReducer {
     return this.entries.find((entry) => entry.entryId === entryId);
   }
 }
+
+/**
+ * Reuses the previous object for every entry a snapshot did not change.
+ *
+ * Snapshots arrive as freshly parsed data, so every entry would otherwise get a
+ * new identity on each push and every memoised entry component would re-render -
+ * re-parsing the markdown of the whole conversation several times a second while
+ * a reply streams. Entries that are byte-identical keep their old reference and
+ * React skips them.
+ *
+ * The comparison is structural rather than field-by-field on purpose: a shallow
+ * check cannot see a nested change (a tool call settling, an edit being decided),
+ * and a missed change would freeze the UI on stale data. Serializing is far
+ * cheaper than the render it avoids.
+ *
+ * @param previous - Entries currently rendered, in order.
+ * @param next - Entries from the incoming snapshot.
+ * @returns `next` with unchanged entries replaced by their previous object, or
+ *   `previous` itself when nothing changed at all.
+ */
+export function reconcileEntries(
+  previous: readonly TimelineEntry[],
+  next: readonly TimelineEntry[],
+): TimelineEntry[] {
+  if (previous.length === 0) {
+    return next as TimelineEntry[];
+  }
+  let changed = previous.length !== next.length;
+  // Same length but a different id sequence means the order changed, which
+  // affects the render even though every entry is individually unchanged.
+  if (!changed) {
+    for (let i = 0; i < next.length; i += 1) {
+      if (previous[i]!.entryId !== next[i]!.entryId) {
+        changed = true;
+        break;
+      }
+    }
+  }
+  const byId = new Map(previous.map((entry) => [entry.entryId, entry]));
+  const merged = next.map((entry) => {
+    const prior = byId.get(entry.entryId);
+    if (prior && prior.kind === entry.kind && JSON.stringify(prior) === JSON.stringify(entry)) {
+      return prior;
+    }
+    changed = true;
+    return entry;
+  });
+  return changed ? merged : (previous as TimelineEntry[]);
+}

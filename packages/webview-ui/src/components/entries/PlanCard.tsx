@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { PlanEntry } from '@dsh-vscode/core';
 import { useT } from '../../strings.js';
 
@@ -13,7 +14,7 @@ const PRIORITY_LABEL: Record<PlanEntry['priority'], string> = {
   low: 'P3',
 };
 
-export function PlanCard({ entries }: { entries: PlanEntry[] }) {
+export const PlanCard = memo(function PlanCard({ entries }: { entries: PlanEntry[] }) {
   const t = useT();
   if (entries.length === 0) {
     return null;
@@ -35,4 +36,4 @@ export function PlanCard({ entries }: { entries: PlanEntry[] }) {
       </ul>
     </div>
   );
-}
+});

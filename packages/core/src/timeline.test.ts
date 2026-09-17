@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { TimelineReducer, type TimelineEffect } from './timeline.ts';
+import { reconcileEntries, TimelineReducer, type TimelineEffect } from './timeline.ts';
 import type { AcpSessionUpdate } from './acp.ts';
-import type { EditInfo } from './chat.ts';
+import type { EditInfo, TimelineEntry } from './chat.ts';
 
 /** Deterministic id factory for assertions. */
 function testIds(): () => string {
@@ -241,5 +241,70 @@ describe('TimelineReducer - restore', () => {
     reducer.apply(text('x'));
     reducer.restore([]);
     expect(reducer.entries).toHaveLength(0);
+  });
+});
+
+describe('reconcileEntries', () => {
+  const user = (id: string, text: string): TimelineEntry => ({
+    entryId: id,
+    kind: 'user',
+    text,
+    attachments: [],
+    timestamp: 1,
+  });
+
+  it('keeps the previous object for entries a snapshot did not change', () => {
+    const first = [user('a', 'one'), user('b', 'two')];
+    const second = [user('a', 'one'), user('b', 'two')];
+    const merged = reconcileEntries(first, second);
+    // Identity is what lets React skip the untouched entries.
+    expect(merged[0]).toBe(first[0]);
+    expect(merged[1]).toBe(first[1]);
+  });
+
+  it('returns the previous array itself when nothing changed', () => {
+    const first = [user('a', 'one')];
+    expect(reconcileEntries(first, [user('a', 'one')])).toBe(first);
+  });
+
+  it('adopts new objects only for the entries that changed', () => {
+    const first = [user('a', 'one'), user('b', 'two')];
+    const grown = user('b', 'two plus more');
+    const merged = reconcileEntries(first, [user('a', 'one'), grown]);
+    expect(merged[0]).toBe(first[0]);
+    expect(merged[1]).toBe(grown);
+  });
+
+  it('notices a nested change instead of freezing stale data', () => {
+    const entry = (state: 'pending' | 'accepted'): TimelineEntry => ({
+      entryId: 'e1',
+      kind: 'edit',
+      edit: {
+        editId: 'edit-1',
+        path: 'a.ts',
+        oldText: 'a',
+        newText: 'b',
+        applied: true,
+        origin: 'toolDiff',
+        state,
+      },
+    });
+    const first = [entry('pending')];
+    const merged = reconcileEntries(first, [entry('accepted')]);
+    expect(merged[0]).not.toBe(first[0]);
+    expect(merged[0]!.kind === 'edit' && merged[0]!.edit.state).toBe('accepted');
+  });
+
+  it('handles added, removed and reordered entries', () => {
+    const first = [user('a', 'one')];
+    expect(reconcileEntries(first, [user('a', 'one'), user('b', 'two')])).toHaveLength(2);
+    expect(reconcileEntries([user('a', 'one'), user('b', 'two')], [user('a', 'one')])).toHaveLength(1);
+    const reordered = reconcileEntries([user('a', 'one'), user('b', 'two')], [user('b', 'two'), user('a', 'one')]);
+    expect(reordered.map((e) => e.entryId)).toEqual(['b', 'a']);
+  });
+
+  it('returns the incoming entries when there is nothing to compare against', () => {
+    const next = [user('a', 'one')];
+    expect(reconcileEntries([], next)).toBe(next);
   });
 });

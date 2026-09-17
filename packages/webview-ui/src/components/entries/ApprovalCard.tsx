@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { ApprovalRequest } from '@dsh-vscode/core';
 import type { FromWebview } from '@dsh-vscode/core';
 import { useT } from '../../strings.js';
@@ -14,7 +15,7 @@ interface ApprovalCardProps {
   send: (message: FromWebview) => void;
 }
 
-export function ApprovalCard({ approval, send }: ApprovalCardProps) {
+export const ApprovalCard = memo(function ApprovalCard({ approval, send }: ApprovalCardProps) {
   const t = useT();
   if (approval.state === 'resolved') {
     const chosen = approval.options.find((option) => option.optionId === approval.chosenOptionId);
@@ -57,4 +58,4 @@ export function ApprovalCard({ approval, send }: ApprovalCardProps) {
       </div>
     </div>
   );
-}
+});

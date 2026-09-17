@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useChat } from './hooks/useChat.js';
 import { langFromLocale, StringsProvider } from './strings.js';
 import { ToastProvider } from './components/Toast.js';
@@ -9,6 +10,11 @@ import { Composer } from './components/Composer.js';
 export function App() {
   const { state, send, submitPrompt, removeChip, busy, draft, setDraft } = useChat();
   const lang = langFromLocale(state.init?.language);
+  // Stable so the memoised list is not invalidated by a fresh closure each
+  // render of App.
+  const handleEdit = useCallback((text: string) => setDraft(text), [setDraft]);
+  const handleCancel = useCallback(() => send({ type: 'cancel' }), [send]);
+  const handlePickFile = useCallback(() => send({ type: 'openFilePicker' }), [send]);
 
   return (
     <StringsProvider lang={lang}>
@@ -20,7 +26,7 @@ export function App() {
               entries={state.entries}
               status={state.status}
               send={send}
-              onEdit={(text) => setDraft(text)}
+              onEdit={handleEdit}
             />
           </main>
           <footer className="app-footer">
@@ -34,9 +40,9 @@ export function App() {
               draft={draft}
               onDraftChange={setDraft}
               onSubmit={submitPrompt}
-              onCancel={() => send({ type: 'cancel' })}
+              onCancel={handleCancel}
               onRemoveChip={removeChip}
-              onPickFile={() => send({ type: 'openFilePicker' })}
+              onPickFile={handlePickFile}
             />
           </footer>
         </div>

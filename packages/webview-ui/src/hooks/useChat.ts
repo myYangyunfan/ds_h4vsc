@@ -14,7 +14,7 @@ import type {
   WebviewInitPayload,
   WebviewSnapshot,
 } from '@dsh-vscode/core';
-import { BUILT_IN_COMMANDS } from '@dsh-vscode/core';
+import { BUILT_IN_COMMANDS, reconcileEntries } from '@dsh-vscode/core';
 import { postToHost } from '../vscode.js';
 
 export interface ChatState {
@@ -60,7 +60,7 @@ function applyMessage(state: ChatState, message: ToWebview): ChatState {
         status: payload.status,
         statusDetail: payload.statusDetail,
         sessionId: payload.sessionId,
-        entries: payload.entries,
+        entries: reconcileEntries(state.entries, payload.entries),
         history: payload.history,
         workingSet: payload.workingSet,
         availableCommands: payload.availableCommands,

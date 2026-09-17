@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, memo } from 'react';
 import type { EditInfo } from '@dsh-vscode/core';
 import { lineDiff } from '@dsh-vscode/core';
 import type { FromWebview } from '@dsh-vscode/core';
@@ -9,7 +9,7 @@ interface EditCardProps {
   send: (message: FromWebview) => void;
 }
 
-export function EditCard({ edit, send }: EditCardProps) {
+export const EditCard = memo(function EditCard({ edit, send }: EditCardProps) {
   const t = useT();
   const [preview, setPreview] = useState(false);
   const stats = diffStats(edit);
@@ -67,7 +67,7 @@ export function EditCard({ edit, send }: EditCardProps) {
       )}
     </div>
   );
-}
+});
 
 function diffStats(edit: EditInfo): { added: number; removed: number } {
   if (edit.oldText === undefined) {

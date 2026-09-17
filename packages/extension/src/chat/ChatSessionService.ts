@@ -55,6 +55,14 @@ export interface SnapshotSink {
 }
 
 const SNAPSHOT_COALESCE_MS = 80;
+/**
+ * Streaming text already travels as `chunk` deltas, so a full snapshot is only
+ * needed to refresh everything else. Each one is cloned whole on both sides, so
+ * during a turn they are spaced out rather than sent at the idle cadence.
+ */
+const SNAPSHOT_COALESCE_STREAMING_MS = 250;
+/** How long a timeline change may sit unpersisted while a turn streams. */
+const PERSIST_COALESCE_MS = 1_500;
 
 export class ChatSessionService implements vscode.Disposable {
   private readonly backend: AcpBackend;
@@ -74,6 +82,9 @@ export class ChatSessionService implements vscode.Disposable {
   private readonly reducer: TimelineReducer;
   private readonly sink: SnapshotSink;
   private snapshotTimer: NodeJS.Timeout | undefined;
+  private persistTimer: NodeJS.Timeout | undefined;
+  /** Entry count at the last pushed snapshot, to spot structural changes. */
+  private lastSnapshotEntries = 0;
   private handlers: KernelHandlers | undefined;
   private captures = new Map<string, { text: string }>();
   private autoReconnecting = false;
@@ -474,6 +485,11 @@ export class ChatSessionService implements vscode.Disposable {
     if (this.snapshotTimer) {
       clearTimeout(this.snapshotTimer);
     }
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = undefined;
+      void this.persistTimeline().catch(() => undefined);
+    }
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
     }
@@ -706,12 +722,41 @@ export class ChatSessionService implements vscode.Disposable {
     this.status = status;
     this.statusDetail = detail;
     this.flushSnapshot();
+    // A finished turn is the cheapest safe point to write the timeline out;
+    // while one is streaming the deferred write is what keeps disk I/O off the
+    // hot path.
+    if (status === 'idle' || status === 'error') {
+      this.persistNow();
+    }
   }
 
   private flushSnapshot(): void {
     const payload: ToWebview = { type: 'snapshot', payload: this.getSnapshot() };
+    this.lastSnapshotEntries = this.reducer.entries.length;
     this.postToPanel(payload);
-    // Persist after the user-visible push; failures are logged not thrown.
+    // Persisting is deliberately NOT part of this path: it serializes the whole
+    // timeline into workspaceState, so doing it per flush wrote the entire
+    // conversation to disk many times a second while streaming.
+    this.schedulePersist();
+  }
+
+  /** Writes the timeline to workspaceState at most once per persist window. */
+  private schedulePersist(): void {
+    if (!this.memento || this.persistTimer) {
+      return;
+    }
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined;
+      this.persistNow();
+    }, PERSIST_COALESCE_MS);
+  }
+
+  /** Persists immediately, cancelling any pending deferred write. */
+  private persistNow(): void {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = undefined;
+    }
     void this.persistTimeline().catch((err) => {
       this.logger.warn(`Timeline persist failed: ${String(err)}`);
     });
@@ -721,10 +766,21 @@ export class ChatSessionService implements vscode.Disposable {
     if (this.snapshotTimer) {
       return;
     }
+    // A change in the entry count means something appeared or vanished (a new
+    // message, a tool card, a plan), which the user should see at once.
+    // Otherwise this is content growing inside an existing entry, and that text
+    // already streams through `chunk` deltas - so the full snapshot, which both
+    // sides clone in its entirety, can wait.
+    const structural = this.reducer.entries.length !== this.lastSnapshotEntries;
+    const window = structural
+      ? 0
+      : this.status === 'prompting'
+        ? SNAPSHOT_COALESCE_STREAMING_MS
+        : SNAPSHOT_COALESCE_MS;
     this.snapshotTimer = setTimeout(() => {
       this.snapshotTimer = undefined;
       this.flushSnapshot();
-    }, SNAPSHOT_COALESCE_MS);
+    }, window);
   }
 
   private postToPanel(message: ToWebview): void {
