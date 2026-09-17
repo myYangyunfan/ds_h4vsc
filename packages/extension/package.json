@@ -2,7 +2,7 @@
   "name": "deepseek-harness",
   "displayName": "DeepSeek Harness",
   "description": "%ext.description%",
-  "version": "0.8.9",
+  "version": "0.9.0",
   "publisher": "dsh-tools",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -211,6 +211,12 @@
         "command": "dsh.showApiKeyStatus",
         "title": "%cmd.showApiKeyStatus%",
         "category": "%category%"
+      },
+      {
+        "command": "dsh.refreshBalance",
+        "title": "%cmd.refreshBalance%",
+        "category": "%category%",
+        "icon": "$(refresh)"
       },
       {
         "command": "dsh.installKernel",

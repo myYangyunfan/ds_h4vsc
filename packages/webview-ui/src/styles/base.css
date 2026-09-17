@@ -1475,3 +1475,52 @@ pre code {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Context-usage meter in the panel header: a compact number plus a thin bar. */
+.usage-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  height: 22px;
+  border-radius: var(--dsh-radius);
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.usage-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-bar {
+  display: inline-block;
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--vscode-badge-background);
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--vscode-charts-blue, var(--vscode-textLink-foreground));
+}
+
+.usage-meter:hover .usage-bar-fill {
+  background: var(--vscode-textLink-foreground);
+}
+
+/* Account balance chip, alongside the context meter. */
+.balance-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  height: 22px;
+  border-radius: var(--dsh-radius);
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  white-space: nowrap;
+}

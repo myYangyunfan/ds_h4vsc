@@ -1,5 +1,6 @@
 import type { ChatState } from '../hooks/useChat.js';
-import type { FromWebview } from '@dsh-vscode/core';
+import type { FromWebview, SessionConfigOption } from '@dsh-vscode/core';
+import { configChoiceGroups } from '@dsh-vscode/core';
 import { useT, type T } from '../strings.js';
 
 function relativeTime(updatedAt: number, t: T): string {
@@ -18,6 +19,40 @@ function relativeTime(updatedAt: number, t: T): string {
   return t('relDay', { n: Math.floor(hours / 24) });
 }
 
+/** Compact token count: 15346 -> "15.3k", 1000000 -> "1M". */
+function formatTokens(value: number): string {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M`;
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}k`;
+  }
+  return String(value);
+}
+
+/** Currency symbol for the balance chip; the API reports a currency code. */
+function currencySymbol(currency: string): string {
+  switch (currency.toUpperCase()) {
+    case 'CNY':
+      return '¥';
+    case 'USD':
+      return '$';
+    default:
+      return '';
+  }
+}
+
+/** Title for a config option, preferring a localised name for the known ones. */
+function configOptionLabel(option: SessionConfigOption, t: T): string {
+  if (option.id === 'model') {
+    return t('model');
+  }
+  if (option.category === 'thought_level' || option.id.includes('reasoning')) {
+    return t('reasoningEffort');
+  }
+  return option.name;
+}
+
 interface HeaderProps {
   state: ChatState;
   send: (message: FromWebview) => void;
@@ -25,7 +60,9 @@ interface HeaderProps {
 
 export function Header({ state, send }: HeaderProps) {
   const t = useT();
-  const { init, history, canLoadSession, modes, modeId, authMethods, status } = state;
+  const { init, history, canLoadSession, modes, modeId, configOptions, usage, authMethods, status } = state;
+  const hasUsage = usage !== undefined && usage.size > 0;
+  const usedShare = hasUsage ? Math.min(1, usage.used / usage.size) : 0;
 
   return (
     <header className="header">
@@ -47,6 +84,71 @@ export function Header({ state, send }: HeaderProps) {
               </option>
             ))}
           </select>
+        )}
+        {/*
+          The kernel exposes its pickers as session configuration options rather
+          than ACP modes, which is why the model and reasoning level live here.
+          Values are opaque strings echoed back untouched.
+        */}
+        {configOptions.map((option) => (
+          <select
+            key={option.id}
+            className="header-select"
+            value={option.currentValue}
+            title={configOptionLabel(option, t)}
+            aria-label={configOptionLabel(option, t)}
+            onChange={(event) =>
+              send({ type: 'setConfigOption', optionId: option.id, value: event.target.value })
+            }
+          >
+            {configChoiceGroups(option.options).map((group, index) => {
+              const values = group.values.map((value) => (
+                <option key={value.value} value={value.value} title={value.description}>
+                  {value.name}
+                </option>
+              ));
+              return group.label ? (
+                <optgroup key={`${group.label}-${index}`} label={group.label}>
+                  {values}
+                </optgroup>
+              ) : (
+                values
+              );
+            })}
+          </select>
+        ))}
+        {state.balance && (
+          <span
+            className="balance-chip"
+            title={t('balanceDetail', {
+              total: `${currencySymbol(state.balance.currency)}${state.balance.totalBalance}`,
+              granted: state.balance.grantedBalance,
+              toppedUp: state.balance.toppedUpBalance,
+            })}
+          >
+            <i className="codicon codicon-credit-card" aria-hidden />
+            <span className="usage-text">
+              {currencySymbol(state.balance.currency)}
+              {state.balance.totalBalance}
+            </span>
+          </span>
+        )}
+        {hasUsage && (
+          <span
+            className="usage-meter"
+            title={t('contextUsageDetail', {
+              used: usage.used.toLocaleString(),
+              size: usage.size.toLocaleString(),
+            })}
+          >
+            <i className="codicon codicon-pie-chart" aria-hidden />
+            <span className="usage-text">
+              {formatTokens(usage.used)} / {formatTokens(usage.size)}
+            </span>
+            <span className="usage-bar" aria-hidden>
+              <span className="usage-bar-fill" style={{ width: `${Math.round(usedShare * 100)}%` }} />
+            </span>
+          </span>
         )}
         {canLoadSession && history.length > 0 && (
           <select

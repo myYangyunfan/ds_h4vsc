@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import type { ContextAttachment } from '@dsh-vscode/core';
 import { readSettings, getApiKey, setApiKey, API_KEY_SECRET } from './config/Settings.js';
 import { hasKernelCredential, resolveKernelHome } from './config/kernelCredentials.js';
+import { fetchBalance, readStoredApiKey } from './config/balance.js';
 import { AcpBackend } from './backend/AcpBackend.js';
 import { DshLocator } from './backend/DshLocator.js';
 import { ChatSessionService } from './chat/ChatSessionService.js';
@@ -61,9 +62,19 @@ export function activate(context: vscode.ExtensionContext): void {
     logger,
   );
   bag.push(service);
+  // ACP has no billing, so the balance is the one thing fetched client-side.
+  // The key is the user's SecretStorage entry when they stored one, otherwise
+  // the shared credential the kernel itself authenticates with.
+  service.setBalanceProvider(async () => {
+    const key =
+      (await getApiKey(context.secrets)) ??
+      (await readStoredApiKey(resolveKernelHome(readSettings().homeDir)));
+    return key ? fetchBalance(key) : undefined;
+  });
   // Wire persistence + restore the previous session's timeline.
   service.setMemento(context.workspaceState);
   void service.restoreTimeline();
+  void service.refreshBalance(true);
 
   const extensionVersion = readExtensionVersion(context);
   // The panel only needs to prompt when *no* layer has a key: not SecretStorage,
@@ -565,6 +576,9 @@ export function activate(context: vscode.ExtensionContext): void {
         ? l10n.t('DeepSeek Harness：内核已通过自身凭据库登录，无需在此设置 API Key。')
         : l10n.t('DeepSeek Harness：尚未存储 API Key。'),
     );
+  }));
+  bag.push(vscode.commands.registerCommand('dsh.refreshBalance', async () => {
+    await service.refreshBalance(true);
   }));
   bag.push(vscode.commands.registerCommand('dsh.installKernel', async () => {
     await vscode.window.withProgress(

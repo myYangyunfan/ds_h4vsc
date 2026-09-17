@@ -14,7 +14,12 @@ import type {
   AcpPermissionRequest,
   AcpSessionUpdate,
 } from '@dsh-vscode/core';
-import { normalizeSessionUpdate, type AgentModeInfo } from '@dsh-vscode/core';
+import {
+  normalizeConfigOptions,
+  normalizeSessionUpdate,
+  type AgentModeInfo,
+  type SessionConfigOption,
+} from '@dsh-vscode/core';
 
 export type StopReason = 'end_turn' | 'cancelled' | 'refusal' | 'max_tokens' | 'other';
 
@@ -37,6 +42,8 @@ export interface SessionHandle {
   sessionId: string;
   modes: AgentModeInfo[];
   modeId?: string;
+  /** Settings the kernel exposes for this session (model, reasoning effort). */
+  configOptions: SessionConfigOption[];
 }
 
 interface SessionModeState {
@@ -196,7 +203,11 @@ export class AcpClient {
   async newSession(cwd: string): Promise<SessionHandle> {
     const result = await this.connection.newSession({ cwd, mcpServers: [] });
     const modes = extractModes(result);
-    return { sessionId: result.sessionId, ...modes };
+    return {
+      sessionId: result.sessionId,
+      configOptions: normalizeConfigOptions((result as { configOptions?: unknown }).configOptions),
+      ...modes,
+    };
   }
 
   async loadSession(cwd: string, sessionId: string): Promise<SessionHandle> {
@@ -209,11 +220,28 @@ export class AcpClient {
       // persisted locally in workspaceState.
       const resumed = await this.connection.resumeSession({ sessionId, cwd, mcpServers: [] });
       const modes = extractModes(resumed);
-      return { sessionId, ...modes };
+      return {
+        sessionId,
+        configOptions: normalizeConfigOptions((resumed as { configOptions?: unknown }).configOptions),
+        ...modes,
+      };
     }
     const loaded = await this.connection.loadSession({ sessionId, cwd, mcpServers: [] });
     const modes = extractModes(loaded);
-    return { sessionId, ...modes };
+    return {
+      sessionId,
+      configOptions: normalizeConfigOptions((loaded as { configOptions?: unknown }).configOptions),
+      ...modes,
+    };
+  }
+
+  /**
+   * Changes a session configuration option (the model picker, the reasoning
+   * level). The value is the kernel's own opaque id, taken straight from the
+   * option it sent, and must not be parsed or rebuilt.
+   */
+  async setConfigOption(sessionId: string, configId: string, value: string): Promise<void> {
+    await this.connection.setSessionConfigOption({ sessionId, configId, value });
   }
 
   async prompt(sessionId: string, blocks: PromptContentBlock[]): Promise<StopReason> {

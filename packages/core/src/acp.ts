@@ -9,7 +9,10 @@
  */
 import type {
   ApprovalKind,
+  ContextUsage,
   PlanEntry,
+  SessionConfigOption,
+  SessionConfigValue,
   SlashCommandInfo,
   ToolCallKind,
   ToolCallStatus,
@@ -55,6 +58,8 @@ export type AcpSessionUpdate =
   | { sessionUpdate: 'plan'; entries: PlanEntry[] }
   | { sessionUpdate: 'available_commands_update'; commands: SlashCommandInfo[] }
   | { sessionUpdate: 'current_mode_update'; currentModeId: string }
+  | { sessionUpdate: 'config_options'; options: SessionConfigOption[] }
+  | { sessionUpdate: 'usage'; usage: ContextUsage }
   | { sessionUpdate: 'unknown'; observedKind: string };
 
 interface AcpChunkFields {
@@ -162,7 +167,80 @@ export function normalizeSessionUpdate(raw: Record<string, unknown>): AcpSession
         sessionUpdate: kind,
         currentModeId: String(raw['currentModeId'] ?? ''),
       };
+    case 'config_option_update':
+      // The kernel re-sends the whole option list on every change (including
+      // the initial one), so this is authoritative rather than a patch.
+      return { sessionUpdate: 'config_options', options: normalizeConfigOptions(raw['configOptions']) };
+    case 'usage_update':
+      return {
+        sessionUpdate: 'usage',
+        usage: { used: Number(raw['used'] ?? 0), size: Number(raw['size'] ?? 0) },
+      };
     default:
       return { sessionUpdate: 'unknown', observedKind: kind };
   }
+}
+
+/**
+ * Maps the kernel's session configuration options (model, reasoning effort, ...)
+ * into the shape the panel renders.
+ *
+ * Values are opaque: a model value looks like `["provider","name"]`, so it is
+ * carried as a string and echoed back verbatim rather than parsed.
+ */
+export function normalizeConfigOptions(raw: unknown): SessionConfigOption[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const options: SessionConfigOption[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue;
+    }
+    const source = entry as Record<string, unknown>;
+    const id = typeof source['id'] === 'string' ? source['id'] : '';
+    if (!id) {
+      continue;
+    }
+    options.push({
+      id,
+      name: typeof source['name'] === 'string' ? source['name'] : id,
+      category: typeof source['category'] === 'string' ? source['category'] : undefined,
+      type: typeof source['type'] === 'string' ? source['type'] : 'select',
+      currentValue: typeof source['currentValue'] === 'string' ? source['currentValue'] : '',
+      options: normalizeConfigChoices(source['options']),
+    });
+  }
+  return options;
+}
+
+function normalizeConfigChoices(raw: unknown): SessionConfigOption['options'] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const choices: SessionConfigOption['options'] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue;
+    }
+    const source = entry as Record<string, unknown>;
+    if (Array.isArray(source['options'])) {
+      choices.push({
+        group: typeof source['group'] === 'string' ? source['group'] : '',
+        name: typeof source['name'] === 'string' ? source['name'] : '',
+        options: normalizeConfigChoices(source['options']) as SessionConfigValue[],
+      });
+      continue;
+    }
+    const value = source['value'];
+    if (typeof value !== 'string') {
+      continue;
+    }
+    choices.push({
+      value,
+      name: typeof source['name'] === 'string' ? source['name'] : value,
+      description: typeof source['description'] === 'string' ? source['description'] : undefined,
+    });
+  }
+  return choices;
 }

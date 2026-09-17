@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import {
   TimelineReducer,
   contentBlockText,
+  type AccountBalance,
   type AgentModeInfo,
   type AcpPermissionOutcome,
   type AcpPermissionRequest,
@@ -21,6 +22,8 @@ import {
   type KernelHandlers,
   type PromptContentBlock,
   type QuickActionId,
+  type ContextUsage,
+  type SessionConfigOption,
   type SessionMeta,
   type SessionStatus,
   type SlashCommandInfo,
@@ -63,6 +66,8 @@ const SNAPSHOT_COALESCE_MS = 80;
 const SNAPSHOT_COALESCE_STREAMING_MS = 250;
 /** How long a timeline change may sit unpersisted while a turn streams. */
 const PERSIST_COALESCE_MS = 1_500;
+/** Don't hit the provider's balance endpoint more often than this. */
+const BALANCE_REFRESH_MS = 60_000;
 
 export class ChatSessionService implements vscode.Disposable {
   private readonly backend: AcpBackend;
@@ -78,6 +83,16 @@ export class ChatSessionService implements vscode.Disposable {
   private modes: AgentModeInfo[] = [];
   private modeId: string | undefined;
   private kernelCommands: SlashCommandInfo[] = [];
+  /** Session settings the kernel exposes (model, reasoning effort). */
+  private configOptions: SessionConfigOption[] = [];
+  /** Context occupancy reported by the kernel, if it reports any. */
+  private usage: ContextUsage | undefined;
+  /** Account balance; ACP has no billing, so the host fetches it itself. */
+  private balance: AccountBalance | undefined;
+  /** Supplies the balance on demand; injected by the extension host. */
+  private balanceProvider: (() => Promise<AccountBalance | undefined>) | undefined;
+  private balanceRefreshing = false;
+  private lastBalanceAt = 0;
   private history: SessionMeta[] = [];
   private readonly reducer: TimelineReducer;
   private readonly sink: SnapshotSink;
@@ -175,6 +190,36 @@ export class ChatSessionService implements vscode.Disposable {
   /** R8: apply changed settings without reloading the window. */
   updateSettings(settings: DshSettings): void {
     this.settingsRef = settings;
+  }
+
+  /** Supplies the balance the panel displays; the host owns the credentials. */
+  setBalanceProvider(provider: () => Promise<AccountBalance | undefined>): void {
+    this.balanceProvider = provider;
+  }
+
+  /**
+   * Refreshes the account balance. Throttled because it is a network call to the
+   * provider, and silent on failure: a balance the panel could not fetch is not
+   * something the user can act on.
+   */
+  async refreshBalance(force = false): Promise<void> {
+    if (!this.balanceProvider || this.balanceRefreshing) {
+      return;
+    }
+    if (!force && Date.now() - this.lastBalanceAt < BALANCE_REFRESH_MS) {
+      return;
+    }
+    this.balanceRefreshing = true;
+    try {
+      const balance = await this.balanceProvider();
+      this.lastBalanceAt = Date.now();
+      if (balance !== undefined) {
+        this.balance = balance;
+        this.flushSnapshot();
+      }
+    } finally {
+      this.balanceRefreshing = false;
+    }
   }
 
   /** Wires workspaceState-backed timeline persistence. */
@@ -275,6 +320,7 @@ export class ChatSessionService implements vscode.Disposable {
         this.activeSessionId = handle.sessionId;
         this.modes = handle.modes;
         this.modeId = handle.modeId;
+        this.configOptions = handle.configOptions;
         const defaultTitle = trimmed.slice(0, 60);
         await this.sessions.upsert(handle.sessionId, defaultTitle);
         await this.reloadHistory();
@@ -363,6 +409,8 @@ export class ChatSessionService implements vscode.Disposable {
     this.modes = [];
     this.modeId = undefined;
     this.kernelCommands = [];
+    this.configOptions = [];
+    this.usage = undefined;
     this.reducer.reset();
     this.workingSet.clear();
     this.setStatus('idle');
@@ -391,6 +439,7 @@ export class ChatSessionService implements vscode.Disposable {
       this.activeSessionId = handle.sessionId;
       this.modes = handle.modes;
       this.modeId = handle.modeId;
+      this.configOptions = handle.configOptions;
       // The kernel resumes the session but does not replay its messages, so the
       // transcript comes from what was stored while it was live.
       const restored = this.restoreSessionTimeline(handle.sessionId);
@@ -473,6 +522,29 @@ export class ChatSessionService implements vscode.Disposable {
     this.scheduleSnapshot();
   }
 
+  /**
+   * Changes a session configuration option (the model picker, the reasoning
+   * level). The kernel echoes the new state back as a `config_option_update`, so
+   * the local list is only updated optimistically to keep the picker responsive.
+   */
+  async setConfigOption(optionId: string, value: string): Promise<void> {
+    if (!this.sessionId) {
+      return;
+    }
+    try {
+      const handlers = await this.ensureKernel();
+      await this.backend.setConfigOption(this.sessionId, optionId, value, handlers);
+      this.configOptions = this.configOptions.map((option) =>
+        option.id === optionId ? { ...option, currentValue: value } : option,
+      );
+      this.flushSnapshot();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`setConfigOption(${optionId}) failed: ${message}`);
+      void vscode.window.showWarningMessage(l10n.t('无法切换设置：{0}', message));
+    }
+  }
+
   async setMode(modeId: string): Promise<void> {
     if (!this.sessionId) {
       return;
@@ -510,6 +582,9 @@ export class ChatSessionService implements vscode.Disposable {
       kernelCommands: this.kernelCommands,
       modes: this.modes,
       modeId: this.modeId,
+      configOptions: this.configOptions,
+      usage: this.usage,
+      balance: this.balance,
       authMethods: caps.authMethods,
       canLoadSession: caps.canLoadSession,
     });
@@ -572,6 +647,11 @@ export class ChatSessionService implements vscode.Disposable {
       this.kernelCommands = update.commands;
     } else if (update.sessionUpdate === 'current_mode_update') {
       this.modeId = update.currentModeId;
+    } else if (update.sessionUpdate === 'config_options') {
+      // Re-sent wholesale on every change, so it replaces rather than patches.
+      this.configOptions = update.options;
+    } else if (update.sessionUpdate === 'usage') {
+      this.usage = update.usage;
     }
     this.scheduleSnapshot();
   }
@@ -761,6 +841,8 @@ export class ChatSessionService implements vscode.Disposable {
     // hot path.
     if (status === 'idle' || status === 'error') {
       this.persistNow();
+      // A finished turn is what changes the balance.
+      void this.refreshBalance();
     }
   }
 

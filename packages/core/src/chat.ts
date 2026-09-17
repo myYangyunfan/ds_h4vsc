@@ -148,3 +148,78 @@ export interface SlashCommandInfo {
   name: string;
   description: string;
 }
+
+// ---------------------------------------------------------------------------
+// Session configuration and context usage
+// ---------------------------------------------------------------------------
+
+/** One selectable value of a session configuration option. */
+export interface SessionConfigValue {
+  /** Opaque identifier the kernel expects back; never parse or rebuild it. */
+  value: string;
+  name: string;
+  description?: string;
+}
+
+/** A titled group of values, which is how the kernel presents models. */
+export interface SessionConfigValueGroup {
+  group: string;
+  name: string;
+  options: SessionConfigValue[];
+}
+
+export type SessionConfigChoice = SessionConfigValue | SessionConfigValueGroup;
+
+/**
+ * A setting the kernel exposes for the current session - the model picker and
+ * the reasoning level arrive this way.
+ *
+ * Not to be confused with `AgentModeInfo`: the kernel has no `session/set_mode`
+ * at all, it advertises config options instead.
+ */
+export interface SessionConfigOption {
+  id: string;
+  name: string;
+  category?: string;
+  type: string;
+  /** Current selection, echoed back verbatim when the user picks another. */
+  currentValue: string;
+  options: SessionConfigChoice[];
+}
+
+/** Context occupancy of the current session, in tokens. */
+export interface ContextUsage {
+  used: number;
+  size: number;
+}
+
+/** Normalises the kernel's select options into groups for rendering. */
+export function configChoiceGroups(
+  choices: readonly SessionConfigChoice[],
+): Array<{ label?: string; values: SessionConfigValue[] }> {
+  const groups: Array<{ label?: string; values: SessionConfigValue[] }> = [];
+  const ungrouped: SessionConfigValue[] = [];
+  for (const choice of choices) {
+    if ('options' in choice) {
+      groups.push({ label: choice.name || choice.group, values: [...choice.options] });
+    } else {
+      ungrouped.push(choice);
+    }
+  }
+  // Ungrouped values come first so the common case (reasoning level) reads as a
+  // plain list rather than a single anonymous group.
+  return ungrouped.length > 0 ? [{ values: ungrouped }, ...groups] : groups;
+}
+
+/**
+ * The account's remaining balance, as reported by the provider.
+ *
+ * ACP has no notion of billing, so unlike everything else in a snapshot this is
+ * fetched by the client itself.
+ */
+export interface AccountBalance {
+  currency: string;
+  totalBalance: string;
+  grantedBalance: string;
+  toppedUpBalance: string;
+}

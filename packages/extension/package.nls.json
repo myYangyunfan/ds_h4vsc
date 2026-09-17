@@ -27,6 +27,7 @@
   "cmd.clearApiKey": "清除 API Key",
   "cmd.showApiKeyStatus": "查看 API Key 状态",
   "cmd.installKernel": "安装内核（dsh）",
+  "cmd.refreshBalance": "刷新账户余额",
   "cmd.showLogs": "查看日志",
   "cmd.openSettings": "打开设置",
   "setting.executablePath": "dsh 内核入口的绝对路径。留空则自动探测（优先托管安装，其次 PATH）。.js 入口将使用 VS Code 自带运行时执行。",

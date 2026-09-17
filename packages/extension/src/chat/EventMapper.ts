@@ -4,7 +4,10 @@
  * review and test.
  */
 import type {
+  AccountBalance,
+  ContextUsage,
   EditInfo,
+  SessionConfigOption,
   SessionMeta,
   SessionStatus,
   SlashCommandInfo,
@@ -24,6 +27,9 @@ export interface SnapshotInput {
   kernelCommands: SlashCommandInfo[];
   modes: AgentModeInfo[];
   modeId?: string;
+  configOptions: SessionConfigOption[];
+  usage?: ContextUsage;
+  balance?: AccountBalance;
   authMethods: AcpAuthenticateMethod[];
   canLoadSession: boolean;
 }
@@ -39,6 +45,9 @@ export function buildSnapshot(input: SnapshotInput): WebviewSnapshot {
     availableCommands: mergeCommands(input.kernelCommands),
     modes: input.modes,
     modeId: input.modeId,
+    configOptions: input.configOptions,
+    usage: input.usage,
+    balance: input.balance,
     authMethods: input.authMethods,
     canLoadSession: input.canLoadSession,
   };

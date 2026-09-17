@@ -2,6 +2,14 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.9.0 — 模式选择、上下文用量与余额
+
+1. **"今天"重复冒出**：日期分隔符只与**紧邻的上一条**比较，而工具卡/编辑卡/计划/审批/错误这些条目没有时间戳，于是它们之后的那条消息总被当成当天第一条，反复打印"今天"。改为把"上一个已知时间戳"向后传递，每天一个分隔符
+2. **无法切换模式（模型 / 推理档位）**：实测内核**根本没有** `session/set_mode`（`set_mode`/`availableModes`/`modeId` 出现次数全为 0），它暴露的是 `configOptions` + `config_option_update`，设置走 `session/set_config_option`。而扩展的模式选择器接的正是那个不存在的 `session/set_mode`，所以永远是空的。现在按内核真实机制实现：`model`（DeepSeek-V4-Flash / Pro / Vision-Exp，带分组）与 `reasoning_effort`（Off/Low/High/Max）以原生下拉呈现，值按内核给的原样回传（模型值本身是 JSON 文本，不可解析重建）
+3. **上下文占用度**：内核一直在发 `usage_update`（`{used, size}`），而 core 里没有任何处理，被当作未知更新丢弃。现在接入并在面板头部显示为 `15.3k / 1M` 加一条细进度条
+4. **DeepSeek 余额**：ACP 没有账单概念（内核桥里没有任何余额相关代码），这是唯一需要扩展自己取的数据。新增 `GET https://api.deepseek.com/user/balance` 调用（已用真实密钥验证返回 200），密钥优先取 VS Code SecretStorage，否则取内核自用的那份共享凭据；每回合结束后刷新（限流 1 分钟），并在面板头部显示余额，悬停可见赠送/充值明细。密钥从不写日志、不进快照
+5. **测试**：core 新增 `acp.test.ts`（配置项归一化、分组顺序、用量归一化、畸形数据容错），extension 新增 `balance.test.ts`（响应解析、密钥来源优先级、空值与环境变量）。合计 92 项
+
 ## 0.8.9 — 历史对话可见
 
 1. **根因：对话内容只存一个槽位**。`persistTimeline()` 把 `{sessionId, entries, workingSet}` 写进**单个键** `dsh.timeline`，`loadSession()` 又只做 `reducer.reset()`、从不加载目标会话的内容，`newChat()` 还会把这个键整个删掉。于是**点开任何历史会话都是空对话，而且切走时上一个会话的内容就被覆盖丢失**。内核侧也无法补救：实测 `session/resume` 只返回 modes/configOptions，**不重放任何消息**

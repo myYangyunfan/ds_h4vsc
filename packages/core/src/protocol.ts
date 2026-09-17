@@ -5,11 +5,14 @@
  * travels as small chunk deltas to keep rendering smooth.
  */
 import type {
+  AccountBalance,
   ApprovalRequest,
   ContextAttachment,
+  ContextUsage,
   EditInfo,
   PlanEntry,
   QuickActionId,
+  SessionConfigOption,
   SessionMeta,
   SessionStatus,
   SlashCommandInfo,
@@ -52,6 +55,15 @@ export interface WebviewSnapshot {
   availableCommands: SlashCommandInfo[];
   modes: AgentModeInfo[];
   modeId?: string;
+  /**
+   * Settings the kernel exposes for this session (model, reasoning effort).
+   * The kernel has no `session/set_mode`, so this is where its pickers live.
+   */
+  configOptions: SessionConfigOption[];
+  /** Context occupancy of the current session, when the kernel reports it. */
+  usage?: ContextUsage;
+  /** Account balance, when the panel could reach the provider. */
+  balance?: AccountBalance;
   authMethods: AcpAuthenticateMethod[];
   canLoadSession: boolean;
 }
@@ -82,6 +94,7 @@ export type FromWebview =
   | { type: 'authenticate'; methodId: string }
   | { type: 'openSettings' }
   | { type: 'setMode'; modeId: string }
+  | { type: 'setConfigOption'; optionId: string; value: string }
   | { type: 'insertCode'; code: string }
   | { type: 'showPlan'; entries: PlanEntry[] }
   | { type: 'quickAction'; action: QuickActionId }
@@ -117,6 +130,7 @@ export function isFromWebview(value: unknown): value is FromWebview {
     'authenticate',
     'openSettings',
     'setMode',
+    'setConfigOption',
     'insertCode',
     'showPlan',
     'quickAction',

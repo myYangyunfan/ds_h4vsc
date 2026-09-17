@@ -27,6 +27,7 @@
   "cmd.clearApiKey": "Clear API Key",
   "cmd.showApiKeyStatus": "Show API Key Status",
   "cmd.installKernel": "Install Kernel (dsh)",
+  "cmd.refreshBalance": "Refresh Account Balance",
   "cmd.showLogs": "Show Logs",
   "cmd.openSettings": "Open Settings",
   "setting.executablePath": "Absolute path to the dsh kernel entry. Leave empty to auto-detect (managed install, then PATH). A .js entry is executed with the VS Code runtime.",

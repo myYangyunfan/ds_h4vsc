@@ -70,8 +70,12 @@ export class TimelineReducer {
         return [];
       case 'available_commands_update':
       case 'current_mode_update':
+      case 'config_options':
+      case 'usage':
       case 'unknown':
-        // Handled by the host directly (composer command list / mode picker).
+        // Handled by the host directly: the composer command list, the session
+        // configuration pickers (model / reasoning effort) and the context
+        // usage meter all read live state rather than a timeline entry.
         return [];
       default: {
         const exhaustive: never = update;

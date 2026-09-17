@@ -92,6 +92,16 @@ export class AcpBackend {
     await client.closeSession(sessionId);
   }
 
+  async setConfigOption(
+    sessionId: string,
+    configId: string,
+    value: string,
+    handlers: KernelHandlers,
+  ): Promise<void> {
+    const client = await this.ensureConnected(handlers);
+    await client.setConfigOption(sessionId, configId, value);
+  }
+
   async prompt(
     sessionId: string,
     blocks: PromptContentBlock[],

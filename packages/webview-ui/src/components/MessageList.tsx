@@ -62,6 +62,30 @@ function MessageListImpl({ entries, status, send, onEdit }: MessageListProps) {
   }, [entries]);
 
   const hint = statusHint(status, t);
+  /**
+   * Date separators, keyed by entry.
+   *
+   * This used to compare each entry with the one immediately before it, but most
+   * entries carry no timestamp (tool calls, edits, plans, approvals, errors), so
+   * any of those in between made the next message look like the first of the day
+   * and printed "today" again. Carrying the last known timestamp forward gives
+   * one separator per day.
+   */
+  const separators = useMemo(() => {
+    const labels = new Map<string, string>();
+    let previous: number | undefined;
+    for (const entry of filtered) {
+      const timestamp = entryTimestamp(entry);
+      const label = dateSeparatorLabel(timestamp, previous, t);
+      if (label) {
+        labels.set(entry.entryId, label);
+      }
+      if (timestamp !== undefined) {
+        previous = timestamp;
+      }
+    }
+    return labels;
+  }, [filtered, t]);
 
   if (entries.length === 0) {
     return (
@@ -116,13 +140,8 @@ function MessageListImpl({ entries, status, send, onEdit }: MessageListProps) {
           )}
         </div>
       )}
-      {filtered.map((entry, index) => {
-        const prev = index > 0 ? filtered[index - 1] : undefined;
-        const separator = dateSeparatorLabel(
-          entryTimestamp(entry),
-          prev ? entryTimestamp(prev) : undefined,
-          t,
-        );
+      {filtered.map((entry) => {
+        const separator = separators.get(entry.entryId);
         let node: React.ReactNode;
         switch (entry.kind) {
           case 'user':

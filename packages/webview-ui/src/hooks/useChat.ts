@@ -28,6 +28,9 @@ export interface ChatState {
   availableCommands: WebviewSnapshot['availableCommands'];
   modes: WebviewSnapshot['modes'];
   modeId?: string;
+  configOptions: WebviewSnapshot['configOptions'];
+  usage?: WebviewSnapshot['usage'];
+  balance?: WebviewSnapshot['balance'];
   authMethods: WebviewSnapshot['authMethods'];
   canLoadSession: boolean;
   chips: ContextAttachment[];
@@ -43,6 +46,7 @@ const EMPTY: ChatState = {
   // Built-ins are always offered, even before the first host snapshot.
   availableCommands: [...BUILT_IN_COMMANDS],
   modes: [],
+  configOptions: [],
   authMethods: [],
   canLoadSession: false,
   chips: [],
@@ -66,6 +70,9 @@ function applyMessage(state: ChatState, message: ToWebview): ChatState {
         availableCommands: payload.availableCommands,
         modes: payload.modes,
         modeId: payload.modeId,
+        configOptions: payload.configOptions ?? [],
+        usage: payload.usage,
+        balance: payload.balance,
         authMethods: payload.authMethods,
         canLoadSession: payload.canLoadSession,
       };

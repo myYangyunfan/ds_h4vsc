@@ -150,6 +150,9 @@ export class PanelController implements vscode.WebviewViewProvider {
         case 'setMode':
           await service.setMode(message.modeId);
           break;
+        case 'setConfigOption':
+          await service.setConfigOption(message.optionId, message.value);
+          break;
         case 'insertCode':
           await this.insertIntoActiveEditor(message.code);
           break;

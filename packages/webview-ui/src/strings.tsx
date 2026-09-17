@@ -13,6 +13,11 @@ const zh = {
   newChat: '新对话',
   settings: '设置',
   agentMode: '代理模式',
+  model: '模型',
+  reasoningEffort: '推理档位',
+  contextUsage: '上下文占用',
+  contextUsageDetail: '已用 {used} / {size} tokens',
+  balanceDetail: '余额 {total}（赠送 {granted}，充值 {toppedUp}）',
   signInRequired: '需要登录',
   signIn: '登录',
   emptyIntro:
@@ -109,6 +114,11 @@ const en: Strings = {
   newChat: 'New chat',
   settings: 'Settings',
   agentMode: 'Agent mode',
+  model: 'Model',
+  reasoningEffort: 'Reasoning effort',
+  contextUsage: 'Context usage',
+  contextUsageDetail: '{used} of {size} tokens used',
+  balanceDetail: 'Balance {total} (granted {granted}, topped up {toppedUp})',
   signInRequired: 'Sign in required',
   signIn: 'Sign in',
   emptyIntro:
