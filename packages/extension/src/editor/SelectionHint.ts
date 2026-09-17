@@ -8,9 +8,9 @@
  * a range - so this is a *hint* carrying the shortcut, and the clickable routes
  * stay the lightbulb (code actions), the editor context menu and the palette.
  *
- * Off by default? No - but it is a setting (`dsh.selectionHint`) because a hint
- * that follows every selection can get in the way, and selecting text is also
- * how people copy things.
+ * It only appears once the selection has held still (see SETTLE_MS) and can be
+ * turned off entirely (`dsh.selectionHint`): selecting text is also how people
+ * copy things, and a hint that reacts to every selection change gets in the way.
  */
 import { l10n } from 'vscode';
 import * as vscode from 'vscode';
@@ -23,6 +23,17 @@ function shortcutHint(): string {
 export class SelectionHint implements vscode.Disposable {
   private readonly decoration: vscode.TextEditorDecorationType;
   private enabled = true;
+  private timer: NodeJS.Timeout | undefined;
+
+  /**
+   * How long the selection must hold still before the hint appears.
+   *
+   * Showing it on every selection change repainted the hint on every mouse move
+   * while dragging, which read as constant flashing. Clearing immediately and
+   * waiting for the selection to settle means nothing appears mid-drag, and the
+   * hint arrives once the selection is what the user meant to select.
+   */
+  private static readonly SETTLE_MS = 600;
 
   constructor() {
     this.decoration = vscode.window.createTextEditorDecorationType({
@@ -55,19 +66,49 @@ export class SelectionHint implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.cancelPending();
+    this.clear();
     this.decoration.dispose();
   }
 
-  /** Paints the hint on the active editor, or clears it. */
+  /** Clears the hint, then shows it again once the selection stops moving. */
   private refresh(): void {
+    this.cancelPending();
+    this.clear();
     const editor = vscode.window.activeTextEditor;
-    if (!editor) {
+    if (!this.enabled || !editor || editor.selection.isEmpty) {
       return;
     }
-    const selection = editor.selection;
-    const show = this.enabled && !selection.isEmpty && editor.document.uri.scheme === 'file';
-    // An empty list clears whatever was painted before, which is how the hint
-    // disappears again when the selection collapses.
-    editor.setDecorations(this.decoration, show ? [new vscode.Range(selection.end, selection.end)] : []);
+    if (editor.document.uri.scheme !== 'file') {
+      return;
+    }
+    const target = editor;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.paint(target);
+    }, SelectionHint.SETTLE_MS);
+  }
+
+  /** Paints the hint, re-checking the state that may have moved on. */
+  private paint(editor: vscode.TextEditor): void {
+    if (!this.enabled || editor !== vscode.window.activeTextEditor || editor.selection.isEmpty) {
+      return;
+    }
+    const { end } = editor.selection;
+    editor.setDecorations(this.decoration, [new vscode.Range(end, end)]);
+  }
+
+  /** Clears the hint from every visible editor, not just the active one. */
+  private clear(): void {
+    for (const editor of vscode.window.visibleTextEditors) {
+      editor.setDecorations(this.decoration, []);
+    }
+  }
+
+  private cancelPending(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
   }
 }

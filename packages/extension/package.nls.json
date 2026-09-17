@@ -58,5 +58,5 @@
   "cmd.sessions.rename": "重命名会话",
   "cmd.sessions.delete": "删除会话",
   "cmd.sessions.refresh": "刷新会话列表",
-  "setting.selectionHint": "在选中的代码末尾显示一行快捷键提示（Ctrl+Alt+A 加入对话）。选中文本也会用于复制等操作，觉得碍事可关掉。"
+  "setting.selectionHint": "选中代码后，等选区停止变动约 0.6 秒，在其末尾显示一行快捷键提示（Ctrl+Alt+A 加入对话）。选中文本也会用于复制等操作，觉得碍事可关掉。"
 }
