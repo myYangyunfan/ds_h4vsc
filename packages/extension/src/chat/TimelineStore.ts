@@ -91,7 +91,11 @@ export class TimelineStore {
       stored[legacy.sessionId] ??= {
         entries: legacy.entries,
         workingSet: legacy.workingSet ?? [],
-        updatedAt: Date.now(),
+        // Deliberately the oldest possible stamp, and constant across reads:
+        // `Date.now()` here made the migrated conversation "the most recent" on
+        // every single read, so the panel kept reopening it instead of the
+        // conversation the user had just been in.
+        updatedAt: 0,
       };
     }
     return stored;

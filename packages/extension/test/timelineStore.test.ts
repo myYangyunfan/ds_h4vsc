@@ -115,6 +115,27 @@ describe('TimelineStore', () => {
     expect(store.latest()?.sessionId).toBe('legacy-session');
   });
 
+  it('lets a newer conversation outrank the migrated one, across a reload', async () => {
+    // Regression: the migrated entry used to be re-stamped with `Date.now()` on
+    // every read, so after a reload it was "the most recent" again and the panel
+    // reopened the pre-upgrade conversation instead of the one just used. The
+    // second store below is what a window reload looks like.
+    const memento = memoryMemento();
+    memento.store.set('dsh.timeline', {
+      sessionId: 'legacy-session',
+      entries: transcript('from before the upgrade'),
+      workingSet: [],
+    });
+
+    const beforeReload = new TimelineStore(memento);
+    expect(beforeReload.latest()?.sessionId).toBe('legacy-session');
+    await beforeReload.save('fresh-session', transcript('just now'), []);
+
+    const afterReload = new TimelineStore(memento);
+    expect(afterReload.latest()?.sessionId).toBe('fresh-session');
+    expect(afterReload.load('legacy-session')?.entries).toHaveLength(1);
+  });
+
   it('prefers the per-session entry when both layouts describe a session', async () => {
     const memento = memoryMemento();
     const store = new TimelineStore(memento);

@@ -28,6 +28,7 @@ import {
   type SessionStatus,
   type SlashCommandInfo,
   type TimelineEffect,
+  type TimelineEntry,
   type ToWebview,
 } from '@dsh-vscode/core';
 import { buildSnapshot } from './EventMapper.js';
@@ -198,6 +199,24 @@ export class ChatSessionService implements vscode.Disposable {
   }
 
   /**
+   * Makes sure a session with content is present in the history list.
+   *
+   * Only sessions the panel created used to be registered, so a conversation
+   * held in an adopted session - one reopened from the kernel's history, or
+   * restored from workspaceState after a reload - never appeared in the list and
+   * looked unsaved. An existing entry is left alone so a user's rename or an
+   * AI-generated title survives.
+   */
+  private async ensureSessionListed(sessionId: string, fallbackTitle: string): Promise<void> {
+    const existing = (await this.sessions.list()).find((meta) => meta.sessionId === sessionId);
+    if (existing) {
+      return;
+    }
+    await this.sessions.upsert(sessionId, fallbackTitle);
+    await this.reloadHistory();
+  }
+
+  /**
    * Refreshes the account balance. Throttled because it is a network call to the
    * provider, and silent on failure: a balance the panel could not fetch is not
    * something the user can act on.
@@ -247,6 +266,7 @@ export class ChatSessionService implements vscode.Disposable {
       return;
     }
     await this.timelines.save(this.sessionId, this.reducer.entries, this.workingSet.list());
+    this.logger.debug(`Persisted ${this.reducer.entries.length} entries for ${this.sessionId}`);
   }
 
   /** Restores the most recently used conversation (called once on activation). */
@@ -264,6 +284,10 @@ export class ChatSessionService implements vscode.Disposable {
     this.logger.info(
       `Restored timeline for ${latest.sessionId}: ${latest.timeline.entries.length} entries`,
     );
+    // A conversation restored from storage must be listed as well: it may have
+    // been held in a session the panel never created, and an unlisted
+    // conversation is indistinguishable from an unsaved one.
+    await this.ensureSessionListed(latest.sessionId, titleFromEntries(latest.timeline.entries));
   }
 
   /**
@@ -322,13 +346,16 @@ export class ChatSessionService implements vscode.Disposable {
         this.modeId = handle.modeId;
         this.configOptions = handle.configOptions;
         const defaultTitle = trimmed.slice(0, 60);
-        await this.sessions.upsert(handle.sessionId, defaultTitle);
-        await this.reloadHistory();
+        await this.ensureSessionListed(handle.sessionId, defaultTitle);
         // R9: replace the truncated-default title with an AI-generated one.
         void this.autoTitle(handle.sessionId, defaultTitle);
       } else {
         // A session restored from workspaceState is not open in a fresh kernel.
         await this.ensureSessionActive(handlers);
+        // A session the panel did not create - restored after a reload, or
+        // adopted from the kernel's own history - must still be listed, or the
+        // conversation the user just had looks unsaved.
+        await this.ensureSessionListed(this.sessionId, trimmed.slice(0, 60));
       }
 
       this.reducer.addUserMessage(trimmed, merged);
@@ -958,4 +985,14 @@ export class ChatSessionService implements vscode.Disposable {
  */
 function isAlreadyActive(message: string): boolean {
   return /already active/i.test(message);
+}
+
+/** A readable fallback title for a conversation: its first user message. */
+function titleFromEntries(entries: readonly TimelineEntry[]): string {
+  for (const entry of entries) {
+    if (entry.kind === 'user' && entry.text.trim()) {
+      return entry.text.trim().slice(0, 60);
+    }
+  }
+  return l10n.t('新对话');
 }
