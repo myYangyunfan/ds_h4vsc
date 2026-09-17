@@ -2,6 +2,12 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.9.7 — diff 标题栏按钮失效（0.9.6 引入的回归）
+
+1. **是我上一版打断的**。0.9.6 为修"原文件不显示"把 editId 从虚拟 URI 的 **authority** 挪进了 path，而 `extension.ts` 里 diff 标题栏的保留/取消命令正是从 `uri.authority` 取 id 的：现在取到空字符串，`if (editId)` 不成立，于是**点击后静默什么都不做**。上一版我只改了 URI 布局，没有全局搜过它的消费方
+2. **修复**：URI 布局的解析权收归 `DiffService.editIdFor(uri)` 一家，命令层改为向它询问，不再自己拼凑；命令解析不到条目时记警告（此前是完全静默）
+3. **防回归**：把布局抽成不依赖 `vscode` 的 `editor/editUri.ts`（`editPathFor` / `parseEditPath`），并新增 `test/editUri.test.ts` 钉住往返解析——用例直接用真实会话里出现过的 `edit-call_00_ET_…` 与中文文件名 `KNN_分类.py`，并断言 id 必须编码在 path 而非 authority。**这个坑我连续踩了两次（同一个 URI 布局、两处各自解析），现在有了单一归属和测试**
+
 ## 0.9.6 — 审查按钮"没任何用"与 diff 原文件
 
 1. **按钮其实生效了，只是界面不刷新**。读持久化数据发现工作集里两条变更都已是 `state=rejected, applied=false`——说明点击确实传到了宿主并改了状态。但 `workingSet.onChange` **只被用于更新状态栏徽标，没有任何地方推送快照**，而面板完全靠快照渲染，于是列表一直显示旧状态，"逐个审查/全部保留/拒绝全部"看起来毫无作用。现由 `ChatSessionService` 订阅工作集变化并推送（与 `SessionStore.onChange` 同一模式），状态文案（已保留/已拒绝/待审查）与配色本就有，现在才真正显示出来

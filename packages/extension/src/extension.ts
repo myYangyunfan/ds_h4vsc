@@ -17,7 +17,7 @@ import { ChatSessionService } from './chat/ChatSessionService.js';
 import { SessionStore } from './chat/SessionStore.js';
 import { ApprovalBridge } from './approval/ApprovalBridge.js';
 import { ContextService } from './editor/ContextService.js';
-import { DiffService } from './editor/DiffService.js';
+import { DiffService, EDIT_SCHEME } from './editor/DiffService.js';
 import { WorkingSet } from './editor/WorkingSet.js';
 import { CHAT_VIEW_ID, PanelController } from './ui/PanelController.js';
 import { SESSIONS_VIEW_ID, SessionsView } from './sessions/SessionsView.js';
@@ -456,9 +456,19 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }));
   // R6: accept/reject directly from the native diff editor title bar.
+  // The URI layout belongs to DiffService; asking it keeps the two in step.
   const editIdFromActiveDiff = (): string | undefined => {
     const uri = vscode.window.activeTextEditor?.document.uri;
-    return uri?.scheme === 'dsh-edit' ? uri.authority : undefined;
+    if (!uri) {
+      return undefined;
+    }
+    const editId = diff.editIdFor(uri);
+    if (!editId && uri.scheme === EDIT_SCHEME) {
+      // The editor is showing our diff but no entry resolves: say so, because
+      // the command otherwise just does nothing when clicked.
+      logger.warn(`No working-set entry for ${uri.toString()}`);
+    }
+    return editId;
   };
   bag.push(vscode.commands.registerCommand('dsh.acceptCurrentEdit', async () => {
     const editId = editIdFromActiveDiff();

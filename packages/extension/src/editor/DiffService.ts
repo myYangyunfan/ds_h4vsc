@@ -15,13 +15,9 @@ import * as vscode from 'vscode';
 import type { EditInfo } from '@dsh-vscode/core';
 import type { WorkingSet } from './WorkingSet.js';
 import type { Logger } from '../util/log.js';
+import { editPathFor, parseEditPath, type DiffSide } from './editUri.js';
 
 export const EDIT_SCHEME = 'dsh-edit';
-
-interface ParsedEditUri {
-  editId: string;
-  side: 'old' | 'new';
-}
 
 export class DiffService {
   private readonly provider: vscode.TextDocumentContentProvider;
@@ -38,6 +34,22 @@ export class DiffService {
   /** Must be called once from activate(). */
   register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(EDIT_SCHEME, this.provider));
+  }
+
+  /**
+   * The working-set entry a document URI refers to, if any.
+   *
+   * The command layer asks this instead of reading the URI itself: the layout is
+   * owned here, and a second place decoding it by hand is exactly how the diff
+   * title-bar buttons silently stopped working when the id moved out of the URI
+   * authority.
+   */
+  editIdFor(uri: vscode.Uri): string | undefined {
+    const parsed = parseEditPath(uri.path);
+    if (!parsed) {
+      return undefined;
+    }
+    return this.workingSet.get(parsed.editId) ? parsed.editId : undefined;
   }
 
   /** Opens the native diff editor for a working-set entry. */
@@ -161,16 +173,15 @@ export class DiffService {
    * diff editor then shows an empty side, which reads as "the original is
    * missing").
    */
-  private virtualUri(edit: EditInfo, side: 'old' | 'new'): vscode.Uri {
-    const name = encodeURIComponent(path.basename(edit.path));
+  private virtualUri(edit: EditInfo, side: DiffSide): vscode.Uri {
     return vscode.Uri.from({
       scheme: EDIT_SCHEME,
-      path: `/${side}/${encodeURIComponent(edit.editId)}/${name}`,
+      path: editPathFor(edit.editId, side, path.basename(edit.path)),
     });
   }
 
   private provideContent(uri: vscode.Uri): string {
-    const parsed = parseEditUri(uri);
+    const parsed = parseEditPath(uri.path);
     if (!parsed) {
       this.logger.warn(`Unrecognised edit uri: ${uri.toString()}`);
       return '';
@@ -205,14 +216,4 @@ export class DiffService {
   }
 }
 
-function parseEditUri(uri: vscode.Uri): ParsedEditUri | undefined {
-  const [, side, rawId] = uri.path.split('/');
-  if ((side !== 'old' && side !== 'new') || !rawId) {
-    return undefined;
-  }
-  try {
-    return { editId: decodeURIComponent(rawId), side };
-  } catch {
-    return undefined;
-  }
-}
+
