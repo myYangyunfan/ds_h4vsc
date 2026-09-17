@@ -79,3 +79,4 @@ Debugging the extension itself: open the folder in VS Code and press F5 (`.vscod
 - Pre-flight: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm package`.
 - Manual matrix (see `docs/testing.md`): Windows/macOS/Linux, light/dark/high-contrast, kernel upgrade smoke, kill-the-kernel-process reconnect.
 - Bump `version` in `packages/extension/package.json` and add a `CHANGELOG.md` entry (the changelog is prose in Chinese, grouped by theme, numbered items).
+- `packages/extension/LICENSE` is a **copy** of the root `LICENSE` — `vsce` only reads the extension directory, and packaging without one prints `WARNING LICENSE, LICENSE.md, or LICENSE.txt not found`. Keep the two in step. Marketplace publishing (publisher ID, PAT, permanent extension ID) is in `docs/release.md`.

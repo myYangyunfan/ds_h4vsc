@@ -14,20 +14,29 @@
 - [ ] `media/icon.png` (128x128+) present; Activity Bar SVG renders in both themes
 - [ ] `packages/extension/README.md` has screenshots/GIF
 - [ ] `CHANGELOG.md` updated; version bumped (semver)
-- [ ] No startup-time network calls; activation only via `onView:dsh.chat`
+- [ ] No startup-time network calls; activation only via `onView:dsh.chat` / `onView:dsh.sessions`
 - [ ] Secrets only via SecretStorage (verified: no `apiKey` in settings schema)
-- [ ] License file + license field present
+- [ ] License file + license field present — `packages/extension/LICENSE` is a **copy** of the root `LICENSE`, because `vsce` only looks inside the extension directory (packaging an extension without one prints `WARNING LICENSE, LICENSE.md, or LICENSE.txt not found`). Change the root file → re-copy it here, they cannot drift apart silently
 
 ## Publish
 
+The publisher ID and extension name are **permanent** once the first version is live: `dsh-tools.deepseek-harness` can never be renamed (only the display name can change). Verify `publisher` in `packages/extension/package.json` matches a publisher that actually exists at https://marketplace.visualstudio.com/manage before the first publish — publishing against a non-existent publisher fails with `Publisher 'dsh-tools' not found`.
+
 ```bash
-# local
+# local, token in the environment
 cd packages/extension
-npx vsce publish --no-dependencies
+VSCE_PAT=<token> npx vsce publish --no-dependencies
+
+# local, token stored once (never passes through a shell argument)
+npx vsce login dsh-tools   # paste the PAT when prompted -> ~/.vsce
+cd packages/extension && npx vsce publish --no-dependencies
 
 # or push a tag; GitHub Actions release.yml publishes with VSCE_PAT
-git tag v0.1.1 && git push origin v0.1.1
+# (requires a git remote and the VSCE_PAT repository secret)
+git tag v1.0.0 && git push origin v1.0.0
 ```
+
+A published version is immutable — bump `version` before re-uploading; `--skip-duplicate` makes a re-run a no-op instead of an error.
 
 ## Post-publish
 
