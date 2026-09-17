@@ -89,6 +89,11 @@ export class ChatSessionService implements vscode.Disposable {
   private configOptions: SessionConfigOption[] = [];
   /** Context occupancy reported by the kernel, if it reports any. */
   private usage: ContextUsage | undefined;
+  /**
+   * Choices made while no session existed yet, applied once one does.
+   * Without this the picker would look settable and silently do nothing.
+   */
+  private readonly pendingConfig = new Map<string, string>();
   /** Account balance; ACP has no billing, so the host fetches it itself. */
   private balance: AccountBalance | undefined;
   /** Supplies the balance on demand; injected by the extension host. */
@@ -385,6 +390,7 @@ export class ChatSessionService implements vscode.Disposable {
         await this.ensureSessionListed(this.sessionId, trimmed.slice(0, 60));
       }
 
+      await this.applyPendingConfig(handlers);
       this.reducer.addUserMessage(trimmed, merged);
       this.setStatus('prompting');
       this.reviewOpened = false;
@@ -463,7 +469,9 @@ export class ChatSessionService implements vscode.Disposable {
     this.modes = [];
     this.modeId = undefined;
     this.kernelCommands = [];
-    this.configOptions = [];
+    // The options are deliberately kept: the model list is account-wide, and
+    // clearing it made the controls disappear until the first message created a
+    // session. Only the context meter is session-specific.
     this.usage = undefined;
     this.reducer.reset();
     this.workingSet.clear();
@@ -555,6 +563,24 @@ export class ChatSessionService implements vscode.Disposable {
     }
   }
 
+  /** Applies choices made before a session existed, once one does. */
+  private async applyPendingConfig(handlers: KernelHandlers): Promise<void> {
+    if (this.pendingConfig.size === 0 || !this.sessionId) {
+      return;
+    }
+    const queued = [...this.pendingConfig];
+    this.pendingConfig.clear();
+    for (const [optionId, value] of queued) {
+      try {
+        await this.backend.setConfigOption(this.sessionId, optionId, value, handlers);
+        this.logger.info(`Applied queued ${optionId}`);
+      } catch (err) {
+        this.logger.warn(`Queued ${optionId} could not be applied: ${String(err)}`);
+      }
+    }
+    this.flushSnapshot();
+  }
+
   /** Copies the session state the kernel reported onto the live snapshot. */
   private applySessionState(handle: SessionHandle): void {
     if (handle.modes.length > 0) {
@@ -595,15 +621,21 @@ export class ChatSessionService implements vscode.Disposable {
    * the local list is only updated optimistically to keep the picker responsive.
    */
   async setConfigOption(optionId: string, value: string): Promise<void> {
+    // Shown immediately so the picker responds; the kernel confirms it back.
+    this.configOptions = this.configOptions.map((option) =>
+      option.id === optionId ? { ...option, currentValue: value } : option,
+    );
     if (!this.sessionId) {
+      // No session to change yet (a fresh "new chat"). Remember the choice and
+      // apply it as soon as one exists.
+      this.pendingConfig.set(optionId, value);
+      this.logger.info(`Queued ${optionId} until a session exists`);
+      this.flushSnapshot();
       return;
     }
     try {
       const handlers = await this.ensureKernel();
       await this.backend.setConfigOption(this.sessionId, optionId, value, handlers);
-      this.configOptions = this.configOptions.map((option) =>
-        option.id === optionId ? { ...option, currentValue: value } : option,
-      );
       this.flushSnapshot();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

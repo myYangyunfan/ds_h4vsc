@@ -2,6 +2,14 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.9.5 — 新对话后控件消失
+
+1. **问题**：用户报"对话框下方什么都没显示"。用**已安装的 0.9.4 产物**在真实浏览器里按侧栏尺寸渲染，控件行确实存在且在输入框下方（`metaFullyVisible: true`，两个下拉都在，无渲染错误），宿主日志也显示拿到了 2 个配置项——所以包和渲染都没问题
+2. **根因**：`newChat()` 会把 `configOptions` 清空，而配置项**只能由 `session/new` 或 `session/resume` 提供**，新会话又要等第一条消息才创建。于是按下"新对话"后控件立刻消失，直到发出消息才回来
+3. **修复**：新对话不再清空配置项——模型列表是账号级的，不该跟着会话消失；只清会话相关的上下文用量。并新增 `pendingConfig`：在没有会话时改选项会**记住该选择**，等会话建立后自动应用（否则下拉看起来能改、实际无效，那是更糟的假象）
+4. **已知限制**：全新环境从未有过会话时，内核无从询问选项，控件要等第一条消息后才出现；此后跨新对话都会保留
+5. **验证**：本次用已安装产物做了真实渲染截图（浏览器面板恢复可用），并新增 `Queued <id> until a session exists` / `Applied queued <id>` 日志便于下次确认
+
 ## 0.9.4 — 会话控件移到输入框下方
 
 1. **真 bug：resume 的结果被丢弃**。0.9.3 的 `primeSession` 日志写着 `Prepared session … with 0 config option(s)`，但我用**同一个会话 id** 单独探测，内核明确返回 2 个配置项。差别在于 `ensureSessionActive()` 拿到 resume 结果后**只记了 activeSessionId，没把 configOptions 赋给服务状态**——所以模型与推理档位始终为空。现抽出 `applySessionState()` 供三处调用点共用，避免再次遗漏
