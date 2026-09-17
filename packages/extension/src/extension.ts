@@ -436,16 +436,23 @@ export function activate(context: vscode.ExtensionContext): void {
   // R10: copy a diagnostics bundle for issue reports.
   bag.push(vscode.commands.registerCommand('dsh.copyDiagnostics', async () => {
     const settings = readSettings();
+    // The kernel lookup is the part a user cannot debug from the UI: on macOS
+    // the kernel is usually installed and merely invisible to the editor's PATH,
+    // so the searched directories and `$PATH` belong in the report.
+    const kernel = await locator.probeReport();
     const report = [
-      '## DeepSeek Harness 诊断信息',
+      '## DeepSeek Harness++ 诊断信息',
       `- 扩展版本: ${readExtensionVersion(context)}`,
       `- VS Code: ${vscode.version}`,
-      `- 平台: ${process.platform}`,
+      `- 平台: ${process.platform} ${process.arch}`,
       `- 内核定位: ${settings.executablePath ?? 'auto (PATH/托管安装)'}`,
       `- ACP 参数: ${settings.acpArgs.join(' ')}`,
       `- 内核 Profile: ${settings.acpProfile}`,
       `- 工作区: ${vscode.workspace.workspaceFolders?.[0]?.name ?? '(无)'}`,
       `- 历史会话数: ${(await sessions.list()).length}`,
+      '',
+      '### 内核探测',
+      ...kernel,
     ].join('\n');
     await vscode.env.clipboard.writeText(report);
     void vscode.window.showInformationMessage(l10n.t('诊断信息已复制到剪贴板。'));

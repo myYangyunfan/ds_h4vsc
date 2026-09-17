@@ -4,18 +4,32 @@
  *  2. A managed install inside the extension's global storage
  *     (`<globalStorage>/dsh/node_modules/@deepseek-ai/dsh`), driven by
  *     `installManaged()`
- *  3. `dsh` on the PATH (global npm install)
+ *  3. `dsh` on the inherited PATH, then - when that fails - in the places a
+ *     global install actually lands (Homebrew, npm's prefix, nvm/fnm/Volta/Bun,
+ *     and whatever the user's login shell puts on `PATH`). A GUI-launched
+ *     editor on macOS does not inherit the terminal's PATH, so the second half
+ *     of step 3 is what makes an installed kernel discoverable there; see
+ *     `kernelPaths.ts`.
  *
  * JS entry points are executed with the running VS Code Electron binary in
  * node mode (ELECTRON_RUN_AS_NODE), which avoids requiring a system Node.
  */
 import { l10n } from 'vscode';
 import * as cp from 'node:child_process';
+import { constants as fsConstants } from 'node:fs';
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import type { DshSettings } from '../config/Settings.js';
 import { DEEPSEEK_KEY_ENV } from '../config/kernelCredentials.js';
 import type { Logger } from '../util/log.js';
+import {
+  binaryFileNames,
+  candidateBinDirs,
+  dedupeDirs,
+  parseShellPathOutput,
+  SHELL_PATH_MARKER,
+} from './kernelPaths.js';
 
 export type DshSource = 'setting' | 'managed' | 'path';
 
@@ -32,11 +46,20 @@ export interface DshLaunchSpec {
   version?: string;
 }
 
+/** A command we can spawn, and whether it needs a shell shim to run. */
+interface ResolvedRunner {
+  command: string;
+  shell: boolean;
+  version?: string;
+}
+
 const MANAGED_DIR = 'dsh';
 const KERNEL_PACKAGE = '@deepseek-ai/dsh';
 const KERNEL_BIN = path.join('lib', 'bin.js');
 const VERSION_TIMEOUT_MS = 15_000;
 const SETUP_TIMEOUT_MS = 300_000;
+/** A `-i` login shell runs the user's rc files; do not wait forever for it. */
+const SHELL_PATH_TIMEOUT_MS = 5_000;
 
 export class DshLocator {
   constructor(
@@ -51,6 +74,16 @@ export class DshLocator {
 
   /** SecretStorage key to hand the kernel, when the user stored one. */
   private apiKey: string | undefined;
+
+  /**
+   * Directories reported by the user's login shell, resolved at most once per
+   * session - the lookup has to spawn an interactive shell, which costs a few
+   * hundred milliseconds.
+   */
+  private loginShellDirsCache: string[] | undefined;
+
+  /** What the last lookup actually did, so "copy diagnostics" can report it. */
+  private readonly trail: string[] = [];
 
   private get settings(): DshSettings {
     return this.settingsRef;
@@ -96,11 +129,33 @@ export class DshLocator {
       }
     }
 
+    this.logger.warn(`dsh not found. Lookup trail:\n${(await this.probeReport()).join('\n')}`);
     throw new Error(
       l10n.t(
-        '未找到 DeepSeek Harness（dsh）。请执行 `npm install -g @deepseek-ai/dsh` 安装，或在命令面板运行“DeepSeek Harness: 安装内核（dsh）”。',
+        '未找到 DeepSeek Harness（dsh）。请执行 `npm install -g @deepseek-ai/dsh` 安装，或在命令面板运行“DeepSeek Harness: 安装内核（dsh）”。若你在终端里能用 dsh 而这里找不到，是编辑器没有继承终端的 PATH——在设置 dsh.executablePath 填入 `which dsh` 的结果即可。',
       ),
     );
+  }
+
+  /**
+   * Where the kernel was looked for and what happened, as report lines. Both
+   * the failure path (it goes into the log) and the "copy diagnostics" command
+   * use it: on macOS the answer is almost always "the kernel is installed, the
+   * editor's PATH just cannot see it", and that is only debuggable if the
+   * searched directories and the inherited PATH are visible.
+   */
+  async probeReport(): Promise<string[]> {
+    const dirs = await this.candidateDirs();
+    const lines = [
+      `- 宿主 PATH: ${process.env.PATH ?? '(空)'}`,
+      `- SHELL: ${process.env.SHELL ?? '(未设置)'}`,
+      `- 候选目录: ${dirs.length} 个`,
+      ...dirs.slice(0, 10).map((dir) => `  - ${dir}`),
+    ];
+    lines.push(`- dsh: ${(await this.findBinary('dsh')) ?? '未找到'}`);
+    lines.push(`- npm: ${(await this.findBinary('npm')) ?? '未找到'}`);
+    lines.push(...this.trail.slice(-12).map((entry) => `  · ${entry}`));
+    return lines;
   }
 
   /** Installs (or updates) the kernel into global storage. */
@@ -108,8 +163,25 @@ export class DshLocator {
     const dir = this.managedDir;
     await fs.mkdir(dir, { recursive: true });
     const pkgSpec = version?.trim() ? `${KERNEL_PACKAGE}@${version.trim()}` : `${KERNEL_PACKAGE}@latest`;
+    // `npm` has the same discovery problem as `dsh`: a GUI-launched editor on
+    // macOS sees neither Homebrew's nor a version manager's npm, so a bare
+    // `execFile('npm')` fails with ENOENT and "Install kernel" looks like it
+    // silently did nothing.
+    const npm = await this.resolveRunner('npm');
+    if (!npm) {
+      this.logger.warn(`npm not found. Lookup trail:\n${(await this.probeReport()).join('\n')}`);
+      throw new Error(
+        l10n.t(
+          '未找到 npm，无法安装内核。请先安装 Node.js（含 npm），或在设置 dsh.executablePath 里填入已有的 dsh 绝对路径。',
+        ),
+      );
+    }
+    this.logger.info(`Installing ${pkgSpec} with ${npm.command}`);
     onProgress(`Installing ${pkgSpec} ...`);
-    await exec('npm', ['install', '--global', '--prefix', dir, pkgSpec], { shell: process.platform === 'win32' });
+    await exec(npm.command, ['install', '--global', '--prefix', dir, pkgSpec], {
+      shell: npm.shell,
+      timeout: SETUP_TIMEOUT_MS,
+    });
     onProgress('Install complete.');
     const spec = await this.fromManagedInstall();
     if (!spec) {
@@ -214,19 +286,110 @@ export class DshLocator {
   }
 
   private async fromPath(): Promise<DshLaunchSpec | undefined> {
-    const shell = process.platform === 'win32';
-    const version = await tryVersion('dsh', ['--version'], shell);
-    if (version === undefined) {
+    const runner = await this.resolveRunner('dsh');
+    if (!runner) {
       return undefined;
     }
     return {
-      command: 'dsh',
+      command: runner.command,
       args: [...this.settings.acpArgs],
       extraEnv: this.launchEnv('direct'),
-      shell,
+      shell: runner.shell,
       source: 'path',
-      version,
+      version: runner.version,
     };
+  }
+
+  /**
+   * A runnable `dsh`/`npm`: the bare name when the inherited PATH already has
+   * it, otherwise an absolute path found without trusting that PATH. Windows is
+   * the case where the bare name normally wins (npm writes `.cmd` shims into a
+   * directory that is on PATH); macOS launched from the Dock is the case where
+   * it normally loses.
+   */
+  private async resolveRunner(base: string): Promise<ResolvedRunner | undefined> {
+    const shim = process.platform === 'win32';
+    const onPath = await tryVersion(base, ['--version'], shim);
+    if (onPath !== undefined) {
+      this.trail.push(`${base}: 走继承的 PATH`);
+      return { command: base, shell: shim, version: onPath };
+    }
+    this.trail.push(`${base}: 不在继承的 PATH 上`);
+
+    const bin = await this.findBinary(base);
+    if (!bin) {
+      return undefined;
+    }
+    const shell = /\.(cmd|bat|ps1)$/i.test(bin);
+    const version = await tryVersion(bin, ['--version'], shell);
+    if (version === undefined) {
+      this.trail.push(`${base}: 找到 ${bin} 但无法执行`);
+      this.logger.warn(`Found ${bin} but running it failed`);
+      return undefined;
+    }
+    return { command: bin, shell, version };
+  }
+
+  /**
+   * First executable named `base` among the off-PATH candidate directories.
+   * Pure directory math lives in `kernelPaths.ts`; this only touches the disk.
+   */
+  private async findBinary(base: string): Promise<string | undefined> {
+    const dirs = await this.candidateDirs();
+    for (const dir of dirs) {
+      for (const name of binaryFileNames(base, process.platform)) {
+        const candidate = path.join(dir, name);
+        if (await isExecutableFile(candidate)) {
+          this.trail.push(`${base}: ${candidate}`);
+          return candidate;
+        }
+      }
+    }
+    this.trail.push(`${base}: 不在 ${dirs.length} 个候选目录中`);
+    return undefined;
+  }
+
+  /** Candidate directories, with version-manager globs expanded. */
+  private async candidateDirs(): Promise<string[]> {
+    const sources = { home: os.homedir(), platform: process.platform, env: process.env };
+    const expanded: string[] = [];
+    for (const dir of candidateBinDirs(sources)) {
+      if (dir.includes('*')) {
+        expanded.push(...(await expandOneLevel(dir)));
+      } else {
+        expanded.push(dir);
+      }
+    }
+    return dedupeDirs(expanded, await this.loginShellDirs());
+  }
+
+  /**
+   * `PATH` as the user's own shell sees it. Only consulted when the cheaper
+   * probes failed, and cached: spawning an interactive login shell is the most
+   * expensive thing here and its answer cannot change mid-session.
+   */
+  private async loginShellDirs(): Promise<string[]> {
+    if (process.platform === 'win32') {
+      return [];
+    }
+    if (this.loginShellDirsCache) {
+      return this.loginShellDirsCache;
+    }
+    const shell = process.env.SHELL?.trim() || '/bin/sh';
+    try {
+      const { stdout } = await exec(shell, ['-ilc', `printf '${SHELL_PATH_MARKER}%s\\n' "$PATH"`], {
+        timeout: SHELL_PATH_TIMEOUT_MS,
+        maxBuffer: 4 * 1024 * 1024,
+      });
+      const dirs = parseShellPathOutput(stdout);
+      this.trail.push(`login shell ${shell}: ${dirs.length} 个 PATH 目录`);
+      this.loginShellDirsCache = dirs;
+    } catch (err) {
+      this.trail.push(`login shell ${shell}: 读取 PATH 失败`);
+      this.logger.warn(`Could not read PATH from ${shell}: ${String(err)}`);
+      this.loginShellDirsCache = [];
+    }
+    return this.loginShellDirsCache;
   }
 
   /**
@@ -263,6 +426,43 @@ async function assertFile(p: string): Promise<void> {
   const stat = await fs.stat(p).catch(() => undefined);
   if (!stat || !stat.isFile()) {
     throw new Error(`Not a file: ${p}`);
+  }
+}
+
+/** `X_OK` on POSIX; on Windows an existing regular file is enough. */
+async function isExecutableFile(p: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(p);
+    if (!stat.isFile()) {
+      return false;
+    }
+    if (process.platform !== 'win32') {
+      await fs.access(p, fsConstants.X_OK);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Expands a one-level glob, the shape every Node version manager uses to keep
+ * one directory per installed version. A hand-rolled expander rather than a glob
+ * dependency: every pattern in `kernelPaths.ts` has exactly one wildcard, which
+ * stands for a single directory entry.
+ */
+async function expandOneLevel(pattern: string): Promise<string[]> {
+  const star = pattern.indexOf('*');
+  if (star < 0) {
+    return [pattern];
+  }
+  const parent = pattern.slice(0, star).replace(/[\\/]+$/, '');
+  const rest = pattern.slice(star + 1).replace(/^[\\/]+/, '');
+  try {
+    const entries = await fs.readdir(parent, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(parent, entry.name, rest));
+  } catch {
+    return [];
   }
 }
 
