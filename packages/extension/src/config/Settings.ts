@@ -23,6 +23,8 @@ export interface DshSettings {
   readonly autoApproveReadOnly: boolean;
   /** Attach the active editor selection automatically when sending. */
   readonly attachActiveSelection: boolean;
+  /** Show a shortcut hint at the end of a text selection. */
+  readonly selectionHint: boolean;
   /** Open the first pending diff automatically when a turn ends. */
   readonly autoOpenReview: boolean;
 }
@@ -40,6 +42,7 @@ export function readSettings(): DshSettings {
     homeDir: homeDir?.trim() ? homeDir.trim() : undefined,
     autoApproveReadOnly: config.get<boolean>('autoApproveReadOnly') ?? false,
     attachActiveSelection: config.get<boolean>('attachActiveSelection') ?? true,
+    selectionHint: config.get<boolean>('selectionHint') ?? true,
     autoOpenReview: config.get<boolean>('autoOpenReview') ?? true,
   };
 }

@@ -2,7 +2,7 @@
   "name": "deepseek-harness",
   "displayName": "DeepSeek Harness",
   "description": "%ext.description%",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "publisher": "dsh-tools",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -435,6 +435,12 @@
             "default": true,
             "order": 3,
             "description": "%setting.autoOpenReview%"
+          },
+          "dsh.selectionHint": {
+            "type": "boolean",
+            "default": true,
+            "order": 4,
+            "description": "%setting.selectionHint%"
           }
         }
       },

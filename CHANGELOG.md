@@ -2,6 +2,13 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.9.9 — 选中代码后的提示
+
+1. **选中代码即刻提示**：新增 `SelectionHint`，在选区末尾渲染一行淡色斜体提示（`Ctrl+Alt+A 加入对话`）。用的是装饰器的 `after` 内容——VS Code 里唯一能把文字贴在选区后面的机制。**需要说明它只是提示、不可点击**：Trae 那种贴着选区的浮动按钮是它作为 IDE 自身体现的能力，扩展拿不到；可点击的入口仍是 lightbulb（代码操作）、右键菜单与命令面板
+2. **代码操作补上「加入对话」**：原有 lightbulb 只有"解释/重构"，现把「加入对话（Ctrl+Alt+A）」放在首位，快捷键写在标题里，选中代码后按 `Ctrl+.` 或点灯泡即可看到
+3. **可关闭**：新增设置 `dsh.selectionHint`（默认开）。选中文本也常用于复制，觉得碍事可在设置里关掉，改动即时生效（配置变更处理器已接）
+4. 快捷键现状（`dsh.*`）：`Ctrl+Alt+A` 加入对话 · `Ctrl+Alt+E` 解释选中代码 · `Ctrl+Alt+K` 行内编辑 · `Ctrl+Alt+R` 逐个审查 · `Ctrl+Alt+D` 打开面板 · `Ctrl+Alt+N` 新对话
+
 ## 0.9.8 — 变更列表可折叠、可批量关闭
 
 1. **折叠**：变更列表头部新增折叠开关（chevron，带 `aria-expanded` / `aria-controls`）。折叠后只保留标题与全部操作按钮，把纵向空间还给对话；展开/折叠同时隐藏"待处理"提示。注意 `hidden` 属性本身**不足以**隐藏该列表——`.working-set-files` 的 `display: flex` 会盖过浏览器默认规则，因此显式写了 `.working-set-files[hidden] { display: none }`

@@ -57,5 +57,6 @@
   "cmd.sessions.open": "Open Session",
   "cmd.sessions.rename": "Rename Session",
   "cmd.sessions.delete": "Delete Session",
-  "cmd.sessions.refresh": "Refresh Sessions"
+  "cmd.sessions.refresh": "Refresh Sessions",
+  "setting.selectionHint": "Shows a one-line shortcut hint at the end of a text selection (Ctrl+Alt+A adds it to the chat). Turn it off if it gets in the way - selecting text is also how you copy things."
 }

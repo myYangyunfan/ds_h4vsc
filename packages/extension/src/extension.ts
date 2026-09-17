@@ -20,6 +20,7 @@ import { ContextService } from './editor/ContextService.js';
 import { DiffService, EDIT_SCHEME } from './editor/DiffService.js';
 import { WorkingSet } from './editor/WorkingSet.js';
 import { CHAT_VIEW_ID, PanelController } from './ui/PanelController.js';
+import { SelectionHint } from './editor/SelectionHint.js';
 import { SESSIONS_VIEW_ID, SessionsView } from './sessions/SessionsView.js';
 import { StatusItem } from './statusbar/StatusItem.js';
 import { DisposableBag } from './util/dispose.js';
@@ -47,6 +48,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const approvals = new ApprovalBridge(settings);
   const sessions = new SessionStore(context.workspaceState);
   const contexts = new ContextService();
+  // A shortcut hint at the end of a selection, so the affordance is discoverable
+  // without knowing the keybinding (see SelectionHint for what VS Code allows).
+  const selectionHint = new SelectionHint();
+  bag.push(selectionHint);
+  for (const listener of selectionHint.register()) {
+    bag.push(listener);
+  }
+  selectionHint.setEnabled(settings.selectionHint);
   const status = new StatusItem();
   bag.push(status);
   bag.push(backend);
@@ -195,6 +204,8 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }));
   bag.push(vscode.commands.registerCommand('dsh.chat.addToChat', async () => {
+    // Reached from the shortcut, the context menu and the code-action lightbulb
+    // alike; it reports what it added so the action is never silent.
     // Prefer the selection: adding "this bit of code" is the common case, and
     // fromActiveEditor falls back to the whole file when nothing is selected.
     const attachment = contexts.fromActiveEditor(true);
@@ -549,6 +560,7 @@ export function activate(context: vscode.ExtensionContext): void {
       locator.updateSettings(fresh);
       approvals.updateSettings(fresh);
       service.updateSettings(fresh);
+      selectionHint.setEnabled(fresh.selectionHint);
       logger.info('Settings reloaded');
     }),
   );
@@ -723,11 +735,21 @@ function gitOutput(cwd: string, args: string[]): Promise<string> {
 }
 
 /** Lightbulb actions: ask the agent about the current selection. */
+/** The shortcut declared for `dsh.chat.addToChat`, per platform. */
+function shortcutLabel(): string {
+  return process.platform === 'darwin' ? '⌘⌥A' : 'Ctrl+Alt+A';
+}
+
 class AskDshCodeActions implements vscode.CodeActionProvider {
   provideCodeActions(_document: vscode.TextDocument, range: vscode.Range): vscode.CodeAction[] {
     if (range.isEmpty) {
       return [];
     }
+    const addToChat = new vscode.CodeAction(
+      l10n.t('加入对话（{0}）', shortcutLabel()),
+      vscode.CodeActionKind.QuickFix,
+    );
+    addToChat.command = { command: 'dsh.chat.addToChat', title: addToChat.title };
     const explain = new vscode.CodeAction(
       l10n.t('用 DeepSeek Harness 解释所选代码'),
       vscode.CodeActionKind.QuickFix,
@@ -738,7 +760,7 @@ class AskDshCodeActions implements vscode.CodeActionProvider {
       vscode.CodeActionKind.QuickFix,
     );
     refactor.command = { command: 'dsh.chat.refactorSelection', title: refactor.title };
-    return [explain, refactor];
+    return [addToChat, explain, refactor];
   }
 }
 

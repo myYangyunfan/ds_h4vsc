@@ -81,5 +81,7 @@
   "第 {0} 行": "line {0}",
   "第 {0}-{1} 行": "lines {0}-{1}",
   "此会话没有保存的对话内容，面板会是空的；从此版本起新对话都会保留，可从左侧会话列表重新打开。": "No stored transcript for this session, so the panel is empty. From this version on, conversations are kept and can be reopened from the sessions list on the left.",
-  "无法切换设置：{0}": "Could not change the setting: {0}"
+  "无法切换设置：{0}": "Could not change the setting: {0}",
+  "加入对话": "Add to chat",
+  "加入对话（{0}）": "Add to chat ({0})"
 }
