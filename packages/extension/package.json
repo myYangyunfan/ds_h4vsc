@@ -3,15 +3,15 @@
   "displayName": "DeepSeek Harness",
   "description": "%ext.description%",
   "version": "1.0.0",
-  "publisher": "dsh-tools",
+  "publisher": "yunfanyang",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/deepseek_harness"
+    "url": "https://github.com/myYangyunfan/ds_h4vsc"
   },
   "bugs": {
-    "url": "https://github.com/your-org/deepseek_harness/issues"
+    "url": "https://github.com/myYangyunfan/ds_h4vsc/issues"
   },
   "engines": {
     "vscode": "^1.100.0"

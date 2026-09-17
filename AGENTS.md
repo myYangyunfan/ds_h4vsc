@@ -2,7 +2,7 @@
 
 ## What this is
 
-A pnpm monorepo for the **DeepSeek Harness** VS Code extension (`deepseek-harness`, publisher `dsh-tools`). The extension is a *shell*: the AI agent loop, tools, MCP, compaction and plan mode all live in the external kernel `@deepseek-ai/dsh`, which is **not vendored in this repo** — the extension spawns it as a child process and speaks ACP (NDJSON over stdio) to it. The extension owns only UI, editor integration, approvals and diff review.
+A pnpm monorepo for the **DeepSeek Harness** VS Code extension (`deepseek-harness`, publisher `yunfanyang` — the published ID is `yunfanyang.deepseek-harness`). The extension is a *shell*: the AI agent loop, tools, MCP, compaction and plan mode all live in the external kernel `@deepseek-ai/dsh`, which is **not vendored in this repo** — the extension spawns it as a child process and speaks ACP (NDJSON over stdio) to it. The extension owns only UI, editor integration, approvals and diff review.
 
 ## Layout
 

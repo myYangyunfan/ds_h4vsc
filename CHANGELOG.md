@@ -4,9 +4,10 @@ All notable changes to the DeepSeek Harness VS Code extension are documented her
 
 ## 1.0.0 — 版本号提升
 
-1. **版本号从 0.9.11 提升到 1.0.0**，除此之外**没有任何代码改动**——本次发布的内容与 0.9.11 完全一致。提升的依据是功能面已经不再是"试用中的半成品"：右侧对话面板、左侧会话常驻列表、原生 diff 工作集审查（逐个/全部/接受/拒绝/折叠/批量关闭）、模型与推理挡位、上下文占用、余额、选区提示、以及 macOS 的两处修复都已落地并各有测试守住
+1. **版本号从 0.9.11 提升到 1.0.0**，除此之外**没有代码改动**（发布元数据的改动见第 4 条）——本次发布的内容与 0.9.11 一致。提升的依据是功能面已经不再是"试用中的半成品"：右侧对话面板、左侧会话常驻列表、原生 diff 工作集审查（逐个/全部/接受/拒绝/折叠/批量关闭）、模型与推理挡位、上下文占用、余额、选区提示、以及 macOS 的两处修复都已落地并各有测试守住
 2. 需要说明的是，`1.0.0` **不表示内核侧的所有能力都已接通**：Agent 预设（标准/PTC/极简/创造）是内核内部机制，ACP 桥上没有任何读写入口，因此面板上方显示的模式只能来自内核实际下发的 `configOptions`，客户端**看不到也无法切换预设**；这一点与版本号无关，是上游协议的现状
 3. 扩展读取版本的唯一位置是 `package.json`（`extension.ts` 在运行时从 `context.extension.packageJSON` 取），因此没有任何硬编码的版本号需要同步
+4. **发布元数据换成真实值**：`publisher` 由占位的 `dsh-tools` 改为实际存在的 `yunfanyang`（发布者 ID 与扩展名在首次发布后永久固定，扩展 ID 即 `yunfanyang.deepseek-harness`）；`repository` / `bugs` 由 `github.com/your-org/deepseek_harness`（点开 404）改为 `github.com/myYangyunfan/ds_h4vsc`。另外 `vsce` 只读扩展目录下的 License 文件，故把根 `LICENSE` 复制一份到 `packages/extension/LICENSE`（打包后写入 VSIX 内的 `LICENSE.txt`），消除了 `WARNING LICENSE, LICENSE.md, or LICENSE.txt not found`
 
 ## 0.9.11 — macOS 适配
 
