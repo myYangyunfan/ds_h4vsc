@@ -19,7 +19,7 @@ pnpm test
 With `dsh` (0.1.2+) installed and the ACP profile present, verify the handshake:
 
 ```bash
-pnpm --filter deepseek-harness run verify:kernel          # dsh --profile acp
+pnpm --filter deepseek-harness-plus run verify:kernel          # dsh --profile acp
 node packages/extension/scripts/verify-kernel.mjs node <path-to-bin.js> --profile acp
 ```
 

@@ -9,6 +9,7 @@ All notable changes to the DeepSeek Harness VS Code extension are documented her
 3. 扩展读取版本的唯一位置是 `package.json`（`extension.ts` 在运行时从 `context.extension.packageJSON` 取），因此没有任何硬编码的版本号需要同步
 4. **发布元数据换成真实值**：`publisher` 由占位的 `dsh-tools` 改为实际存在的 `yunfanyang`（发布者 ID 与扩展名在首次发布后永久固定，扩展 ID 即 `yunfanyang.deepseek-harness`）；`repository` / `bugs` 由 `github.com/your-org/deepseek_harness`（点开 404）改为 `github.com/myYangyunfan/ds_h4vsc`。另外 `vsce` 只读扩展目录下的 License 文件，故把根 `LICENSE` 复制一份到 `packages/extension/LICENSE`（打包后写入 VSIX 内的 `LICENSE.txt`），消除了 `WARNING LICENSE, LICENSE.md, or LICENSE.txt not found`
 5. **README 补截图、修过期条目**：加入两张实拍截图——整窗（面板在右侧辅助侧边栏，与编辑器并排）与面板特写（流式 markdown、工具卡片、输入框下方的模型/推理挡位/上下文占用）。面板里的账户余额已做模糊处理。同时删掉设置表里**早已不存在的 `dsh.model`**（该设置在本会话早前被删除，README 一直没跟上），补上清单里漏掉的 `dsh.selectionHint`
+6. **改名：`deepseek-harness` 已被占用**。发布时发现市场里已经有 **25 个** "DeepSeek Harness" 扩展，其中 `WentaoJIang.deepseek-harness` 直接占用了 `deepseek-harness` 这个名字（扩展名在全市场唯一，不区分发布者）。改为 **`deepseek-harness-plus`**，显示名 **DeepSeek Harness++**——`+` 只能放在显示名里，清单的 `name` 字段**不接受 `+`**，`vsce package` 会直接报 `Invalid extension "name"`（已实测）。因此本次发布的**最终扩展 ID 是 `yunfanyang.deepseek-harness-plus`**，覆盖第 4 条里写的 `yunfanyang.deepseek-harness`。副作用：扩展 ID 变了，旧 ID 下的 workspaceState 会读不到（历史对话需重新累积），托管内核目录也会按新 ID 重建
 
 ## 0.9.11 — macOS 适配
 

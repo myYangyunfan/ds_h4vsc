@@ -1,6 +1,6 @@
 {
-  "name": "deepseek-harness",
-  "displayName": "DeepSeek Harness",
+  "name": "deepseek-harness-plus",
+  "displayName": "DeepSeek Harness++",
   "description": "%ext.description%",
   "version": "1.0.0",
   "publisher": "yunfanyang",
@@ -476,7 +476,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "verify:kernel": "node scripts/verify-kernel.mjs",
-    "package": "vsce package --no-dependencies -o dist/deepseek-harness.vsix",
+    "package": "vsce package --no-dependencies -o dist/deepseek-harness-plus.vsix",
     "vsce:publish": "vsce publish --no-dependencies",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },

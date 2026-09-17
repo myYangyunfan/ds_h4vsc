@@ -1,4 +1,4 @@
-# DeepSeek Harness for VS Code
+# DeepSeek Harness++ for VS Code
 
 AI 编码代理，由官方开源 **DeepSeek Harness（dsh）** 内核驱动，经 Agent Client Protocol 接入 VS Code。界面中英双语，中文为主（跟随 VS Code 显示语言自动切换）。
 

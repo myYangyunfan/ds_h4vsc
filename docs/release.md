@@ -3,14 +3,14 @@
 ## One-time setup
 
 1. Create a publisher at https://marketplace.visualstudio.com/manage — this project publishes as **`yunfanyang`** (verified to exist; a non-existent ID fails with `Publisher 'yunfanyang' not found`)
-2. `publisher` in `packages/extension/package.json` is set to that ID — the published extension ID is `yunfanyang.deepseek-harness`
+2. `publisher` in `packages/extension/package.json` is set to that ID — the published extension ID is `yunfanyang.deepseek-harness-plus`, shown as **DeepSeek Harness++**. The extension `name` is **globally unique across all publishers** on the marketplace: the original `deepseek-harness` was already taken (`WentaoJIang.deepseek-harness`), and `+` is not a legal character in the manifest `name` at all — `vsce package` fails with `Invalid extension "name"`. So `++` can only live in `displayName`, and the ID spells it `-plus`. The name is permanent once the first version is live; the display name is not.
 3. `repository.url` / `bugs.url` point at https://github.com/myYangyunfan/ds_h4vsc (the marketplace renders these as the listing's Repository/Issues links, so a wrong URL is a visible dead link)
 4. Generate a Personal Access Token (Azure DevOps → User settings → Personal access tokens, scope **Marketplace → Manage**). Locally: `npx vsce login yunfanyang`. In CI: add it as the `VSCE_PAT` repository secret **and** set a git remote — `release.yml` only runs on `git push origin v1.0.0`
 
 ## Pre-flight checklist
 
 - [ ] `pnpm typecheck && pnpm lint && pnpm test` green
-- [ ] `pnpm package` produces `packages/extension/dist/deepseek-harness.vsix` (< 20 MB)
+- [ ] `pnpm package` produces `packages/extension/dist/deepseek-harness-plus.vsix` (< 20 MB)
 - [ ] `media/icon.png` (128x128+) present; Activity Bar SVG renders in both themes
 - [ ] `packages/extension/README.md` has screenshots/GIF
 - [ ] `CHANGELOG.md` updated; version bumped (semver)
@@ -20,7 +20,7 @@
 
 ## Publish
 
-The publisher ID and extension name are **permanent** once the first version is live: `yunfanyang.deepseek-harness` can never be renamed (only the display name can change). Verify `publisher` in `packages/extension/package.json` matches a publisher that actually exists at https://marketplace.visualstudio.com/manage before the first publish — publishing against a non-existent publisher fails with `Publisher 'yunfanyang' not found`.
+The publisher ID and extension name are **permanent** once the first version is live: `yunfanyang.deepseek-harness-plus` can never be renamed (only the display name can change). Verify `publisher` in `packages/extension/package.json` matches a publisher that actually exists at https://marketplace.visualstudio.com/manage before the first publish — publishing against a non-existent publisher fails with `Publisher 'yunfanyang' not found`.
 
 ```bash
 # local, token in the environment

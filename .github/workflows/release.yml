@@ -46,5 +46,5 @@ jobs:
       - name: GitHub release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: packages/extension/dist/deepseek-harness.vsix
+          files: packages/extension/dist/deepseek-harness-plus.vsix
           generate_release_notes: true

@@ -2,7 +2,7 @@
 
 ## What this is
 
-A pnpm monorepo for the **DeepSeek Harness** VS Code extension (`deepseek-harness`, publisher `yunfanyang` — the published ID is `yunfanyang.deepseek-harness`). The extension is a *shell*: the AI agent loop, tools, MCP, compaction and plan mode all live in the external kernel `@deepseek-ai/dsh`, which is **not vendored in this repo** — the extension spawns it as a child process and speaks ACP (NDJSON over stdio) to it. The extension owns only UI, editor integration, approvals and diff review.
+A pnpm monorepo for the **DeepSeek Harness++** VS Code extension (`deepseek-harness-plus`, publisher `yunfanyang` — the published ID is `yunfanyang.deepseek-harness-plus`). The extension is a *shell*: the AI agent loop, tools, MCP, compaction and plan mode all live in the external kernel `@deepseek-ai/dsh`, which is **not vendored in this repo** — the extension spawns it as a child process and speaks ACP (NDJSON over stdio) to it. The extension owns only UI, editor integration, approvals and diff review. The `++` lives in `displayName` only: the manifest `name` **cannot contain `+`** (`vsce` rejects the package outright with `Invalid extension "name"`), so the ID spells it `-plus`.
 
 ## Layout
 
@@ -25,11 +25,11 @@ pnpm typecheck    # tsc --noEmit across all packages
 pnpm lint         # root eslint config covers all packages
 pnpm test         # vitest -r; core reducer tests + extension ACP integration tests
 pnpm watch        # extension esbuild watch only (does NOT watch webview-ui)
-pnpm package      # build + vsce package -> packages/extension/dist/deepseek-harness.vsix
-pnpm --filter deepseek-harness run verify:kernel   # real-kernel ACP handshake pre-flight
+pnpm package      # build + vsce package -> packages/extension/dist/deepseek-harness-plus.vsix
+pnpm --filter deepseek-harness-plus run verify:kernel   # real-kernel ACP handshake pre-flight
 ```
 
-Focused runs: `pnpm --filter @dsh-vscode/core run test`, `pnpm --filter deepseek-harness run test`. `pnpm --filter @dsh-vscode/webview-ui run dev` runs the panel standalone against a mock messaging API with a dark fallback theme.
+Focused runs: `pnpm --filter @dsh-vscode/core run test`, `pnpm --filter deepseek-harness-plus run test`. `pnpm --filter @dsh-vscode/webview-ui run dev` runs the panel standalone against a mock messaging API with a dark fallback theme.
 
 Debugging the extension itself: open the folder in VS Code and press F5 (`.vscode/launch.json` → "Run DeepSeek Harness extension").
 
@@ -70,7 +70,7 @@ Debugging the extension itself: open the folder in VS Code and press F5 (`.vscod
 - **Kernel discovery order** (`DshLocator`): `dsh.executablePath` setting → managed install in `globalStorage/dsh` (npm `--prefix`, run with `ELECTRON_RUN_AS_NODE=1` so no system Node is needed) → `dsh` on PATH.
 - **Windows shims:** `.cmd`/`.bat`/`.ps1` cannot be spawned with `shell: false` (EINVAL since Node's CVE-2024-27980 fix) — route through `shell: true`. With `shell: true`, arguments containing spaces or shell metacharacters must be quoted by hand; several earlier bugs came from exactly this.
 - **Plugin/kernel version mismatch fails with missing exports**, which surfaces as an opaque handshake timeout rather than a clear error.
-- Verify a change against a real kernel with `pnpm --filter deepseek-harness run verify:kernel` (success output: `SUCCESS - the kernel speaks ACP`); the CI-shaped equivalent is the integration test against `packages/extension/test/mock-agent.mjs`, a real child process speaking ACP over stdio. Changing the mock agent is expected when the wire behavior changes.
+- Verify a change against a real kernel with `pnpm --filter deepseek-harness-plus run verify:kernel` (success output: `SUCCESS - the kernel speaks ACP`); the CI-shaped equivalent is the integration test against `packages/extension/test/mock-agent.mjs`, a real child process speaking ACP over stdio. Changing the mock agent is expected when the wire behavior changes.
 - **Pushing to GitHub from this machine is not plain `git push`.** HTTP/2 gets `RPC failed; HTTP 502` on `git-receive-pack` while GETs and `git ls-remote` work — the repo's local config pins `http.version=HTTP/1.1` to work around it. Certificate-revocation checks also fail on this network, so git/curl may need `-c http.schannelCheckRevoke=false` / `--ssl-no-revoke` per command. `api.github.com` is unreachable even when `github.com` is not. Details in `docs/release.md`.
 
 ## Before you ship

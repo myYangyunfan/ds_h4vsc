@@ -1,4 +1,4 @@
-# DeepSeek Harness for VS Code
+# DeepSeek Harness++ for VS Code
 
 AI coding agent for VS Code powered by the [official open-source DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness), integrated over the [Agent Client Protocol (ACP)](https://agentclientprotocol.com).
 

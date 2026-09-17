@@ -12,13 +12,13 @@
     "onlyBuiltDependencies": ["esbuild", "keytar", "@vscode/vsce-sign"]
   },
   "scripts": {
-    "build": "pnpm --filter @dsh-vscode/webview-ui run build && pnpm --filter deepseek-harness run build",
+    "build": "pnpm --filter @dsh-vscode/webview-ui run build && pnpm --filter deepseek-harness-plus run build",
     "compile": "pnpm build",
-    "watch": "pnpm --filter deepseek-harness run watch",
+    "watch": "pnpm --filter deepseek-harness-plus run watch",
     "typecheck": "pnpm -r run typecheck",
     "lint": "eslint .",
     "test": "pnpm -r run test",
-    "package": "pnpm build && pnpm --filter deepseek-harness run package",
+    "package": "pnpm build && pnpm --filter deepseek-harness-plus run package",
     "vsce:package": "pnpm package",
     "clean": "pnpm -r run clean"
   },
