@@ -2,6 +2,15 @@
 
 All notable changes to the DeepSeek Harness VS Code extension are documented here.
 
+## 0.9.11 — macOS 适配
+
+对 macOS 做了一次审查，两处真问题已修，其余本就跨平台。
+
+1. **托管安装的内核在 macOS/Linux 上找不到**：`npm install --global --prefix <dir>` 的落盘位置并不统一——npm 官方文档写明全局安装目录是 `{prefix}/lib/node_modules`（macOS/Linux 即如此，例如 Homebrew 的 `/opt/homebrew/lib/node_modules`），而 Windows 是 `{prefix}/node_modules`。原代码只查后者，所以在 macOS 上"安装内核"会报告成功、紧接着却找不到刚装好的入口。现 `managedBinPath()` 两种布局都查，并在都找不到时记警告
+2. **`⌘⌥D` 在 macOS 被系统占用**：Apple 官方文档明确 `⌥⌘D` 是"显示/隐藏程序坞"。原来"打开面板"在 macOS 用 `cmd+alt+d`，会被系统截走。改为全平台统一 `ctrl+alt+d`（其余组合 `⌘⌥A/E/K/N/R` 经查不与 macOS 默认快捷键冲突，保留）
+3. 审查确认无碍的部分：6 个快捷键原本都声明了 `mac` 变体；平台分支均正确隔离（`shell`/`taskkill` 仅 win32、提示符仅 darwin）；源码无硬编码路径分隔符；内核主目录用 `os.homedir()`；`ELECTRON_RUN_AS_NODE` 在 macOS 同样可用；CI 已覆盖 `macos-latest`
+4. **诚实说明**：本次是代码与上游文档审查，**无法在 macOS 上实机验证**（本机为 Windows）。第 1 条的 POSIX 布局依据 npm 官方文档，第 2 条依据 Apple 官方文档；第 1 条在 macOS 上仍建议实测一次"安装内核"
+
 ## 0.9.10 — 选区提示不再一直闪
 
 1. **问题**：0.9.9 的选中提示"闪得太勤奋"。原因是它在**每次选区变化时立即重画**——拖选时鼠标每移动一下选区就变一次，提示被反复清掉又画上，看起来就是不停闪烁

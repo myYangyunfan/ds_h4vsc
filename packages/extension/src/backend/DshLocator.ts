@@ -170,11 +170,38 @@ export class DshLocator {
     };
   }
 
+  /**
+   * The kernel entry point inside a managed install, under either layout.
+   *
+   * `npm install --global --prefix <dir>` does not put packages in the same
+   * place on every platform: npm documents the global location as
+   * `{prefix}/lib/node_modules` (what macOS and Linux use, e.g. Homebrew's
+   * `/opt/homebrew/lib/node_modules`), while on Windows it lands directly in
+   * `{prefix}/node_modules`. Checking only the Windows shape made "Install
+   * kernel" report success and then fail to find what it had just installed.
+   */
+  private async managedBinPath(): Promise<string | undefined> {
+    const candidates = [
+      path.join(this.managedDir, 'lib', 'node_modules', ...KERNEL_PACKAGE.split('/'), KERNEL_BIN),
+      path.join(this.managedDir, 'node_modules', ...KERNEL_PACKAGE.split('/'), KERNEL_BIN),
+    ];
+    for (const bin of candidates) {
+      try {
+        await assertFile(bin);
+        return bin;
+      } catch {
+        // Try the next layout.
+      }
+    }
+    this.logger.warn(
+      `Managed kernel entry point not found under ${this.managedDir} (looked for ${candidates.length} layouts)`,
+    );
+    return undefined;
+  }
+
   private async fromManagedInstall(): Promise<DshLaunchSpec | undefined> {
-    const bin = path.join(this.managedDir, 'node_modules', ...KERNEL_PACKAGE.split('/'), KERNEL_BIN);
-    try {
-      await assertFile(bin);
-    } catch {
+    const bin = await this.managedBinPath();
+    if (!bin) {
       return undefined;
     }
     return {
