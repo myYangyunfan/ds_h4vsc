@@ -8,6 +8,7 @@ All notable changes to the DeepSeek Harness VS Code extension are documented her
 2. 需要说明的是，`1.0.0` **不表示内核侧的所有能力都已接通**：Agent 预设（标准/PTC/极简/创造）是内核内部机制，ACP 桥上没有任何读写入口，因此面板上方显示的模式只能来自内核实际下发的 `configOptions`，客户端**看不到也无法切换预设**；这一点与版本号无关，是上游协议的现状
 3. 扩展读取版本的唯一位置是 `package.json`（`extension.ts` 在运行时从 `context.extension.packageJSON` 取），因此没有任何硬编码的版本号需要同步
 4. **发布元数据换成真实值**：`publisher` 由占位的 `dsh-tools` 改为实际存在的 `yunfanyang`（发布者 ID 与扩展名在首次发布后永久固定，扩展 ID 即 `yunfanyang.deepseek-harness`）；`repository` / `bugs` 由 `github.com/your-org/deepseek_harness`（点开 404）改为 `github.com/myYangyunfan/ds_h4vsc`。另外 `vsce` 只读扩展目录下的 License 文件，故把根 `LICENSE` 复制一份到 `packages/extension/LICENSE`（打包后写入 VSIX 内的 `LICENSE.txt`），消除了 `WARNING LICENSE, LICENSE.md, or LICENSE.txt not found`
+5. **README 补截图、修过期条目**：加入两张实拍截图——整窗（面板在右侧辅助侧边栏，与编辑器并排）与面板特写（流式 markdown、工具卡片、输入框下方的模型/推理挡位/上下文占用）。面板里的账户余额已做模糊处理。同时删掉设置表里**早已不存在的 `dsh.model`**（该设置在本会话早前被删除，README 一直没跟上），补上清单里漏掉的 `dsh.selectionHint`
 
 ## 0.9.11 — macOS 适配
 

@@ -2,7 +2,11 @@
 
 AI 编码代理，由官方开源 **DeepSeek Harness（dsh）** 内核驱动，经 Agent Client Protocol 接入 VS Code。界面中英双语，中文为主（跟随 VS Code 显示语言自动切换）。
 
-<!-- Screenshots/GIF go here before publishing to the marketplace -->
+![对话面板位于右侧辅助侧边栏，与编辑器并排](media/screenshot-overview.png)
+
+![面板特写：流式 markdown、工具卡片、快捷追问，输入框下方是模型、推理挡位与上下文占用](media/screenshot-panel.png)
+
+面板在**右侧辅助侧边栏**，编辑器留在原位——底部是输入框，输入框下方依次是模型、推理挡位与上下文占用（图中为 `DeepSeek-V4-Flash` / `High` / `31.1k / 1M`）。
 
 ## What it does
 
@@ -56,11 +60,11 @@ AI 编码代理，由官方开源 **DeepSeek Harness（dsh）** 内核驱动，�
 | `dsh.acpArgs` | ACP 服务启动参数（默认 `["--profile", "acp"]`） |
 | `dsh.acpProfile` | ACP 使用的内核 profile（按需自动创建） |
 | `dsh.acpPluginPackage` | 提供 ACP 的内核插件（与内核版本配对安装） |
-| `dsh.model` | 传递给内核配置的默认模型（高级） |
 | `dsh.homeDir` | 覆盖 dsh 主目录 |
 | `dsh.autoApproveReadOnly` | 自动批准只读工具（读/搜/思/抓） |
 | `dsh.attachActiveSelection` | 发送时自动附加活动选区（默认开） |
 | `dsh.autoOpenReview` | 回合结束自动打开首个待审 diff（默认开） |
+| `dsh.selectionHint` | 选中代码后在选区末尾提示快捷键（默认开） |
 
 > 以上设置均支持热重载——修改后立即生效，无需重载窗口。
 

@@ -4,6 +4,10 @@ AI coding agent for VS Code powered by the [official open-source DeepSeek Harnes
 
 The extension is a thin, deeply-integrated shell around the dsh kernel - the same philosophy as Kimi Code for VS Code: the extension renders, reviews and approves; the kernel plans, edits and runs.
 
+![The chat panel in the right-hand secondary side bar, next to the editor](packages/extension/media/screenshot-overview.png)
+
+The panel lives in the **secondary side bar on the right**, so your editor stays where it is. Below the composer are the model, reasoning effort and context occupancy (shown here: `DeepSeek-V4-Flash` / `High` / `31.1k / 1M`).
+
 ## Highlights
 
 - Copilot-style sidebar chat panel that follows your VS Code theme (all colors from `--vscode-*` variables)
